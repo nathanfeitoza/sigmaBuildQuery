@@ -9,10 +9,11 @@ require 'vendor/autoload.php';
 
 echo'<pre>';
 try {
-    $sql = \Sigma\BuildQuery::init('postgres','db','db_teste','infosistemas','info1234');
+    $sql = \Sigma\BuildQuery::init('mysql','localhost','nfe','root','123456');
     $dados = $sql
-        ->tabela('table_teste')
+        ->tabela('clientes')
         ->campos(['*'])
+        ->limit(3,5)
         ->buildQuery('select');
     print_r($dados);
 } catch(Exception $e) {

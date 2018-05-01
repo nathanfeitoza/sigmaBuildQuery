@@ -161,11 +161,14 @@ class BuildQuery implements iBuildQuery
 
                 if($parametros != false)
                 {
+
                     if(is_array($parametros) AND count($parametros) != 0)
                     {
                         for($i = 0; $i < count($parametros); $i++)
                         {
-                            $data->bindValue(($i + 1), $parametros[$i]);
+                            $dados_query = $parametros[$i];
+                            $is_int = is_integer($dados_query) ? PDO::PARAM_INT : null ;
+                            $data->bindValue(($i + 1), $parametros[$i], $is_int);
                         }
                     }
                     else
@@ -707,12 +710,12 @@ class BuildQuery implements iBuildQuery
             $this->limite = $limite;
             $this->offset = $offset;
 
-            $this->valores_insert[] = $limite;
+            $this->valores_insert[] = (int) $limite;
         }
 
         if($offset != false)
         {
-            $this->valores_insert[] = $offset;
+            $this->valores_insert[] = (int) $offset;
         }
 
         return $this;
@@ -787,6 +790,9 @@ class BuildQuery implements iBuildQuery
 
                     $campos_usar = (strlen($limitar) > 0) ? $limitar.$campos_usar : $campos_usar;
                     $limite = "";
+                    break;
+                case "mysql":
+                    $limite = ( (string) $this->offset != false) ? ' LIMIT ?,?' : $limite;
                     break;
             }
 
