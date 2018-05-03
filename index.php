@@ -9,11 +9,12 @@ require 'vendor/autoload.php';
 
 echo'<pre>';
 try {
-    $sql = \Sigma\BuildQuery::init('mysql','localhost','nfe','root','123456');
+    $sql = \Sigma\BuildQuery::init('sqlite','C:\Users\1171139648\Downloads\sigmaBuildQuery\sqlite\teste.db',null,null,null);
+	$dados1 = $sql->tabela('Teste')->campos(['Id','Nome'], [6,"Alguem 2"])->buildQuery('insert');
     $dados = $sql
-        ->tabela('clientes')
+        ->tabela('Teste')
         ->campos(['*'])
-        ->limit(3,5)
+        //->limit(3,5)
         ->buildQuery('select');
     print_r($dados);
 } catch(Exception $e) {
