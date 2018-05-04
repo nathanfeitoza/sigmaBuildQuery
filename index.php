@@ -9,10 +9,20 @@ require 'vendor/autoload.php';
 
 echo'<pre>';
 try {
-    $sql = \Sigma\BuildQuery::init('sqlite','C:\Users\1171139648\Downloads\sigmaBuildQuery\sqlite\teste.db',null,null,null);
+    /*
+    //SQlite
+    $sql = \Sigma\BuildQuery::init('sqlite',__DIR__.'/sqlite/teste.db',null,null,null);
+    */
+
+    /*
+    // Postgres
+    $sql = \Sigma\BuildQuery::init('postgres','db','infosistemas','infosistemas','info1234');
+    */
+    // Firebird
+    $sql = \Sigma\BuildQuery::init('firebird','192.168.0.205','/usr/infosistemas/dados.gdb','infosistemas','firebird');
 	//$dados1 = $sql->tabela('Teste')->campos(['Id','Nome'], [6,"Alguem 2"])->buildQuery('insert');
     $dados = $sql
-        ->tabela('Teste')
+        ->tabela('view_produtos')
         ->campos(['*'])
         //->limit(3,5)
         ->buildQuery('select');

@@ -90,7 +90,7 @@ class BuildQuery implements iBuildQuery
                 $dsn = self::$dbname != false ? $db . "host=" . self::$host . ";dbname=" . self::$dbname :  $db . "host=" . self::$host;
                 if($db == "firebird:")
                 {
-                    $dsn = $db."dbname=".self::$host;
+                    $dsn = $db."dbname=".self::$host.':'.self::$dbname;
                 } 
 				elseif($db == "sqlite:")
 				{
