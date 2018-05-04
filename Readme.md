@@ -3,19 +3,18 @@
 A build query php to make SQL executions easier by standardizing them. Databases available: Mysql, Postgres, Firebird, Sqlite
 
 To start BuildQuery, just make the following call:
-    ```php
+   ```php
     $var = \Sigma\BuildQuery::init( (string) 'driver',(string) 'host',(string) 'database',(string) 'user',(string) 'pass'[, (array) options);
-    ```
+   ```
 After doing this, we have the method of executing SQL scripts (handwritten SQL)
-    ```php
+   ```php
     $var->ExecSql( (string) query, (array) campos [, (boolean) use_transaction, (boolean) use_exception_not_found] );
-    ```
+   ```
     If use_transaction is set to true, it will begin to use database transactions (which have this option: Firebird tested so far)
 
 The methods of querybuilder are shown below:
         Note: The use of the entire query builder is done via polymorphism, which are being shown below. The choice by this method has been established because it looks more like sql queries and block building of codes. Therefore, it facilitates the life of the developer, being that the order of the elements will not change the final result, unless a main element such as -> table (string) is missing, but this check is already done and triggered in the log (to be implemented)
-
-        ```php
+   ```php
         $var->tabela('teste') // Sets the usage table
         ->campos(array("terste1","teste2","teste3")) // Fields used to make select, one can only pass an empty array: [''], and it will search all the fields of the table, or ['*'], or the field names
         ->campos(array("terste1","teste2","teste3"),array("valor1","valor2","valor3")) // Fields and their respective values to be inserted or updated
@@ -44,4 +43,4 @@ The methods of querybuilder are shown below:
         ->tabela("teste4")
         ->campos(array("testar","testarheuhe"), array("testarV","testeF"))
         ->buildQuery("select")
-        ```
+   ```
