@@ -77,6 +77,9 @@ class BuildQuery implements iBuildQuery
             case "firebird":
                 $db = "firebird:";
                 break;
+			case "sqlite":
+				$db = "sqlite:";
+				break;
             default:
                 $err = "Driver inválido";
                 break;
@@ -87,8 +90,12 @@ class BuildQuery implements iBuildQuery
                 $dsn = self::$dbname != false ? $db . "host=" . self::$host . ";dbname=" . self::$dbname :  $db . "host=" . self::$host;
                 if($db == "firebird:")
                 {
-                    $dsn = $db."dbname=".dbself::$host;
-                }
+                    $dsn = $db."dbname=".self::$host.':'.self::$dbname;
+                } 
+				elseif($db == "sqlite:")
+				{
+					$dsn = $db."".self::$host;
+				}
                 if(isset(self::$opcoes['port']))
                 {
                     $porta = self::$opcoes['port'];
@@ -116,9 +123,13 @@ class BuildQuery implements iBuildQuery
                 }
                 $opcs = [
                     PDO::ATTR_CASE => $pdo_case,
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8',
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
                 ];
+				if($db == "mysql:")
+				{
+					$opcs[] = [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8'];
+				}
+				//echo $dsn; exit;
                 self::$con = new PDO($dsn, self::$user, self::$pass, $opcs);
                 return new self;
                 //return self::$con;
@@ -154,7 +165,8 @@ class BuildQuery implements iBuildQuery
                     $pdo_obj->beginTransaction();
 
                 }
-                if(self::$driver != "firebird") {
+				$not_enabled = ['firebird','sqlite'];
+                if(!in_array(self::$driver, $not_enabled)) {
                     $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
                 }
                 $data = $pdo_obj->prepare($query);
@@ -167,7 +179,14 @@ class BuildQuery implements iBuildQuery
                         for($i = 0; $i < count($parametros); $i++)
                         {
                             $dados_query = $parametros[$i];
-                            $is_int = is_integer($dados_query) ? PDO::PARAM_INT : null ;
+							if(is_integer($dados_query)) 
+								$is_int = PDO::PARAM_INT;
+							elseif(is_bool($dados_query))
+								$is_int = PDO::PARAM_BOOL;
+							elseif(is_null($dados_query))
+								$is_int = PDO::PARAM_NULL;
+							else
+								$is_int = PDO::PARAM_STR;
                             $data->bindValue(($i + 1), $parametros[$i], $is_int);
                         }
                     }
