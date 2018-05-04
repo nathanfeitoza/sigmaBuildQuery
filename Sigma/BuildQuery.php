@@ -125,11 +125,15 @@ class BuildQuery implements iBuildQuery
                     PDO::ATTR_CASE => $pdo_case,
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
                 ];
-				if($db == "mysql:")
+
+                if($db == "mysql:")
 				{
-					$opcs[] = [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8'];
+				    $usar = isset(self::$opcoes['name_utf8_mysql']) ? self::$opcoes['name_utf8_mysql'] : false;
+					if((boolean) $usar) {
+                        $opcs[] = [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8'];
+                    }
 				}
-				//echo $dsn; exit;
+
                 self::$con = new PDO($dsn, self::$user, self::$pass, $opcs);
                 return new self;
                 //return self::$con;
@@ -202,7 +206,14 @@ class BuildQuery implements iBuildQuery
                 $data->execute();
                 if($is_select)
                 {
-                    $data_return = $data->fetchAll(PDO::FETCH_OBJ);
+                    $tipo_retorno = PDO::FETCH_OBJ; // Retorna tipo objetos
+                    if(isset(self::$opcoes['return_type']))
+                    {
+                        if((int) self::$opcoes['return_type'] == 2) {
+                            $tipo_retorno = PDO::FETCH_NAMED; // Retorna Tipo array
+                        }
+                    }
+                    $data_return = $data->fetchAll($tipo_retorno);
 
                     if(count($data_return) > 0)
                     {

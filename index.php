@@ -19,16 +19,17 @@ try {
     $sql = \Sigma\BuildQuery::init('postgres','db','infosistemas','infosistemas','info1234');
     */
 
-    /*
+
     // Firebird
     $sql = \Sigma\BuildQuery::init('firebird','192.168.0.205','/usr/infosistemas/dados.gdb','infosistemas','firebird');
-    */
+
+    /*
     // Mysql
     $sql = \Sigma\BuildQuery::init('mysql','192.168.1.32','mysql','root','');
-
+    */
     //$dados1 = $sql->tabela('Teste')->campos(['Id','Nome'], [6,"Alguem 2"])->buildQuery('insert');
     $dados = $sql
-        ->tabela('user')
+        ->tabela('impressoes')
         ->campos(['*'])
         //->limit(3,5)
         ->buildQuery('select');
