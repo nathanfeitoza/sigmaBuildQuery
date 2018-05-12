@@ -1005,27 +1005,25 @@ class BuildQuery implements iBuildQuery
                 'insertSelect',
                 'union',
                 'unionAll',
-                'valores_insert',
                 'ComTransaction',
                 'limite',
                 'offset',
                 'query_union',
-                'valores_insert_bd',
-                'valores_insert',
-                'exception_not_found'];
+                'valores_insert_bd' => [],
+                'valores_insert' => [],
+                'exception_not_found' => true];
             $novo_array = [];
             foreach ($this as $key => $value)
             {
                 if(in_array($key, $virar_false))
                 {
-                    if(!is_array($this->$key))
-                    {
-                        $this->$key = false;
+                    $valor = false;
+                    if(is_array($key)) {
+                        $key = $key[0];
+                        $valor = $key[1];
                     }
-                    else
-                    {
-                        $this->$key = $novo_array;
-                    }
+                    $this->$key = $valor;
+
                 }
             }
             $this->query_union = '';
