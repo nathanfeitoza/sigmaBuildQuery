@@ -273,7 +273,23 @@ class BuildQuery implements iBuildQuery
             throw new Exception("A Query passada não é válida", 003);
         }
     }
+    protected function LimparValores($array_valores) {
+        $novo_array = [];
+        foreach ($this as $key => $value)
+        {
+            if(in_array($key, $array_valores))
+            {
+                $valor = false;
+                if(is_array($key)) {
+                    $key = $key[0];
+                    $valor = $key[1];
+                }
+                $this->$key = $valor;
 
+            }
+        }
+        return $this;
+    }
     protected function create($tipo, $table)
     {
         $this->table = $table;
@@ -689,18 +705,12 @@ class BuildQuery implements iBuildQuery
             'insertSelect',
             'union',
             'unionAll',
-            'valores_insert',
+            'valores_insert' => [],
             'ComTransaction',
             'limite',
             'offset'];
 
-        foreach ($this as $key => $value)
-        {
-            if(in_array($key, $virar_false))
-            {
-                $this->$key = false;
-            }
-        }
+        $this->LimparValores($virar_false);
 
         switch( strtolower($tipo) )
         {
@@ -1012,20 +1022,8 @@ class BuildQuery implements iBuildQuery
                 'valores_insert_bd' => [],
                 'valores_insert' => [],
                 'exception_not_found' => true];
-            $novo_array = [];
-            foreach ($this as $key => $value)
-            {
-                if(in_array($key, $virar_false))
-                {
-                    $valor = false;
-                    if(is_array($key)) {
-                        $key = $key[0];
-                        $valor = $key[1];
-                    }
-                    $this->$key = $valor;
-
-                }
-            }
+            
+            $this->LimparValores($virar_false);
             $this->query_union = '';
         }
 
