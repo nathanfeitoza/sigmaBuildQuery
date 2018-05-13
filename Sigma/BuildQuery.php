@@ -793,9 +793,10 @@ class BuildQuery implements iBuildQuery
         if(isset($this->msg_erro))
         {
             $msg = (isset($msg)) ? $msg : $this->msg_erro;
-            $code_erro_return = isset($code_error) ? $code_error : 405;
-            throw new Exception($msg, $code_erro_return);
-
+            if($msg != false) {
+                $code_erro_return = isset($code_error) ? $code_error : 405;
+                throw new Exception($msg, $code_erro_return);
+            }
         }
 
         $campos_usar = (isset($this->campos_table)) ? implode(",",$this->campos_table) : "*";
