@@ -51,7 +51,7 @@ class BuildQuery implements iBuildQuery
     private $offset = false;
     private $gerar_log = false;
     private $exception_not_found = true;
-    private $msg_erro;
+    private $msg_erro = false;
     private $query_union = '';
 
     private function __construct(){}
@@ -273,7 +273,23 @@ class BuildQuery implements iBuildQuery
             throw new Exception("A Query passada não é válida", 003);
         }
     }
+    protected function LimparValores($array_valores) {
+        $novo_array = [];
+        foreach ($this as $key => $value)
+        {
+            if(in_array($key, $array_valores))
+            {
+                $valor = false;
+                if(is_array($key)) {
+                    $key = $key[0];
+                    $valor = $key[1];
+                }
+                $this->$key = $valor;
 
+            }
+        }
+        return $this;
+    }
     protected function create($tipo, $table)
     {
         $this->table = $table;
@@ -559,7 +575,7 @@ class BuildQuery implements iBuildQuery
                     }
                 }
 
-                if(!isset($this->msg_erro))
+                if($this->msg_erro == false)
                 {
                     $s = '';
 
@@ -689,18 +705,12 @@ class BuildQuery implements iBuildQuery
             'insertSelect',
             'union',
             'unionAll',
-            'valores_insert',
+            'valores_insert' => [],
             'ComTransaction',
             'limite',
             'offset'];
 
-        foreach ($this as $key => $value)
-        {
-            if(in_array($key, $virar_false))
-            {
-                $this->$key = false;
-            }
-        }
+        $this->LimparValores($virar_false);
 
         switch( strtolower($tipo) )
         {
@@ -780,12 +790,13 @@ class BuildQuery implements iBuildQuery
             $code_error = 006;
         }
 
-        if(isset($this->msg_erro))
+        if($this->msg_erro != false)
         {
             $msg = (isset($msg)) ? $msg : $this->msg_erro;
-            $code_erro_return = isset($code_error) ? $code_error : 405;
-            throw new Exception($msg, $code_erro_return);
-
+            if($msg != false) {
+                $code_erro_return = isset($code_error) ? $code_error : 405;
+                throw new Exception($msg, $code_erro_return);
+            }
         }
 
         $campos_usar = (isset($this->campos_table)) ? implode(",",$this->campos_table) : "*";
@@ -1005,29 +1016,15 @@ class BuildQuery implements iBuildQuery
                 'insertSelect',
                 'union',
                 'unionAll',
-                'valores_insert',
                 'ComTransaction',
                 'limite',
                 'offset',
                 'query_union',
-                'valores_insert_bd',
-                'valores_insert',
-                'exception_not_found'];
-            $novo_array = [];
-            foreach ($this as $key => $value)
-            {
-                if(in_array($key, $virar_false))
-                {
-                    if(!is_array($this->$key))
-                    {
-                        $this->$key = false;
-                    }
-                    else
-                    {
-                        $this->$key = $novo_array;
-                    }
-                }
-            }
+                'valores_insert_bd' => [],
+                'valores_insert' => [],
+                'exception_not_found' => true];
+            
+            $this->LimparValores($virar_false);
             $this->query_union = '';
         }
 

@@ -16,12 +16,12 @@ try {
 
     /*
     // Postgres
-    $sql = \Sigma\BuildQuery::init('postgres','db','infosistemas','infosistemas','info1234');
+    $sql = \Sigma\BuildQuery::init('postgres','db','banco','usuario','senha');
     */
 
 
     // Firebird
-    $sql = \Sigma\BuildQuery::init('firebird','192.168.0.205','/usr/infosistemas/dados.gdb','infosistemas','firebird');
+    $sql = \Sigma\BuildQuery::init('postgres','localhost','teste','postgres','123456');
 
     /*
     // Mysql
@@ -29,7 +29,7 @@ try {
     */
     //$dados1 = $sql->tabela('Teste')->campos(['Id','Nome'], [6,"Alguem 2"])->buildQuery('insert');
     $dados = $sql
-        ->tabela('impressoes')
+        ->tabela('testar')
         ->campos(['*'])
         //->limit(3,5)
         ->buildQuery('select');
