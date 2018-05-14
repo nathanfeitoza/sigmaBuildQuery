@@ -51,7 +51,7 @@ class BuildQuery implements iBuildQuery
     private $offset = false;
     private $gerar_log = false;
     private $exception_not_found = true;
-    private $msg_erro;
+    private $msg_erro = false;
     private $query_union = '';
 
     private function __construct(){}
@@ -575,7 +575,7 @@ class BuildQuery implements iBuildQuery
                     }
                 }
 
-                if(!isset($this->msg_erro))
+                if($this->msg_erro == false)
                 {
                     $s = '';
 
@@ -790,7 +790,7 @@ class BuildQuery implements iBuildQuery
             $code_error = 006;
         }
 
-        if(isset($this->msg_erro))
+        if($this->msg_erro != false)
         {
             $msg = (isset($msg)) ? $msg : $this->msg_erro;
             if($msg != false) {
