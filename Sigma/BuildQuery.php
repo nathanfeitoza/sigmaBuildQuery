@@ -557,25 +557,58 @@ class BuildQuery implements iBuildQuery
         return $this;
 
     }
+    // $insert = true, é para ser adicionado no banco, então retorna a ?
+    protected function VerificarParentese($valor,$insert=false)  {
+        preg_match("/\((.*?)\)/", $valor, $in_parenthesis);
+        if($insert)
+            $valor = count($in_parenthesis) >= 1 ? "(".str_pad('?',(count($in_parenthesis) + 1),',?',STR_PAD_RIGHT).")" : '?';
+        else
+            $valor = count($in_parenthesis) >= 1 ? explode(',',$in_parenthesis[1]) : $valor;
+
+        return $valor;
+    }
+
+    protected function AddArrayValoresInsert($array, $delimitador=false) {
+        $array = $delimitador != false ? explode($delimitador, $array) : $array;
+        for($i = 0; $i < count($array); $i++) {
+            $this->valores_insert[] = $array[$i];
+        }
+        return $this->valores_insert;
+    }
 
     public function where($campo,$operador,$valor)
     {
-        $this->valores_insert[] = $valor;
-        $this->WhereAdjust("where",$campo,$operador,'?');
+        $valor_add = $this->VerificarParentese($valor);
+        if(is_array($valor_add)) {
+            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+        } else {
+            $this->valores_insert[] = $valor_add;
+        }
+        $this->WhereAdjust("where",$campo,$operador,$this->VerificarParentese($valor, true));
         return $this;
     }
 
     public function whereOr($campo,$operador,$valor)
     {
-        $this->valores_insert[] = $valor;
-        $this->WhereAdjust("or",$campo,$operador,'?',$this->where);
+        $valor_add = $this->VerificarParentese($valor);
+        if(is_array($valor_add)) {
+            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+        } else {
+            $this->valores_insert[] = $valor_add;
+        }
+        $this->WhereAdjust("or",$campo,$operador,$this->VerificarParentese($valor, true),$this->where);
         return $this;
     }
 
     public function whereAnd($campo,$operador,$valor)
     {
-        $this->valores_insert[] = $valor;
-        $this->WhereAdjust("and",$campo,$operador,'?',$this->where);
+        $valor_add = $this->VerificarParentese($valor);
+        if(is_array($valor_add)) {
+            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+        } else {
+            $this->valores_insert[] = $valor_add;
+        }
+        $this->WhereAdjust("and",$campo,$operador,$this->VerificarParentese($valor, true),$this->where);
         return $this;
     }
 
@@ -627,21 +660,29 @@ class BuildQuery implements iBuildQuery
 
                     for($i = 0; $i < count($campos); $i++)
                     {
+                        $valor_add = $this->VerificarParentese($valores[$i]);
+                        $interrogacoes = $this->VerificarParentese($valores[$i], true);
+                        if(is_array($valor_add)) {
+                            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+                        } else {
+                            $this->valores_insert[] = $valor_add;
+                        }
+
                         if($i == 0)
                         {
-                            $this->valores_insert[] = $valores[0];
-                            $s .= $oper_logicos[0]." (".$campos[0]." ".$operadores[0]." ? ";
+                            //$this->valores_insert[] = $valores[0];
+                            $s .= $oper_logicos[0]." (".$campos[0]." ".$operadores[0]." ".$interrogacoes." ";
                         }
                         elseif($i == count($campos) - 1)
                         {
-                            $this->valores_insert[] = $valores[$i];
-                            $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ? )";
+                            //$this->valores_insert[] = $valores[$i];
+                            $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
                             $this->whereComplex[] = $s;
                         }
                         else
                         {
-                            $this->valores_insert[] = $valores[$i];
-                            $s .= $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ? ";
+                            //$this->valores_insert[] = $valores[$i];
+                            $s .= $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." ";
                         }
                     }
                 }
