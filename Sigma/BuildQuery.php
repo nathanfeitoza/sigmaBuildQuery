@@ -865,7 +865,7 @@ class BuildQuery implements iBuildQuery
 
         $this->create($tipo,$this->table_in);
 
-        if(isset($this->campos_table) AND !is_array($this->campos_table))
+        if(isset($this->campos_table) AND !is_array($this->campos_table) AND $this->method != "DELETE")
         {
             $this->msg_erro = "Os campos não são um array";
             $code_error = 005;
@@ -887,7 +887,7 @@ class BuildQuery implements iBuildQuery
 
         }
 
-        $campos_usar = (isset($this->campos_table)) ? implode(",",$this->campos_table) : "*";
+        $campos_usar = (isset($this->campos_table) && $this->campos_table != false) ? implode(",",$this->campos_table) : "*";
         $where = ($this->where != false) ? " ".$this->where : "";
         $whereOr = ($this->whereOr != false ) ? " ".implode(" ",$this->whereOr) : "";
         $whereAnd = ($this->whereAnd != false ) ? " ".implode(" ",$this->whereAnd) : "";
