@@ -23,6 +23,14 @@ class ComposerStaticInit268b6656a3cd4ac6f1c8011cac962b72
         array (
             'Sigma\\' => 6,
         ),
+        'P' => 
+        array (
+            'Psr\\Log\\' => 8,
+        ),
+        'M' => 
+        array (
+            'Monolog\\' => 8,
+        ),
         'D' => 
         array (
             'Doctrine\\Instantiator\\' => 22,
@@ -44,6 +52,14 @@ class ComposerStaticInit268b6656a3cd4ac6f1c8011cac962b72
         'Sigma\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Sigma',
+        ),
+        'Psr\\Log\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/psr/log/Psr/Log',
+        ),
+        'Monolog\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
         ),
         'Doctrine\\Instantiator\\' => 
         array (

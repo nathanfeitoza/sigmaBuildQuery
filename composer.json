@@ -1,6 +1,6 @@
 {
     "name": "sigma/build-query",
-    "description": "A php build query using pdo. Databases available Mysql, Postgres, Firebird",
+    "description": "A php build query using pdo. Databases available Mysql, Postgres, Firebird, SQlite",
     "type": "library",
     "license": "Apache",
     "authors": [
@@ -10,7 +10,9 @@
         }
     ],
     "minimum-stability": "beta",
-    "require": {},
+    "require": {
+        "monolog/monolog": "^1.23"
+    },
     "require-dev":{
         "phpunit/phpunit": "^6"
     },

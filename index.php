@@ -9,10 +9,10 @@ require 'vendor/autoload.php';
 
 echo'<pre>';
 try {
-    /*
+    
     //SQlite
     $sql = \Sigma\BuildQuery::init('sqlite',__DIR__.'/sqlite/teste.db',null,null,null);
-    */
+    
 
     /*
     // Postgres
@@ -21,7 +21,7 @@ try {
 
 
     // Firebird
-    $sql = \Sigma\BuildQuery::init('postgres','localhost','teste','postgres','123456');
+    //$sql = \Sigma\BuildQuery::init('postgres','localhost','teste','postgres','123456');
 
     /*
     // Mysql
@@ -29,9 +29,10 @@ try {
     */
     //$dados1 = $sql->tabela('Teste')->campos(['Id','Nome'], [6,"Alguem 2"])->buildQuery('insert');
     $dados = $sql
-        ->tabela('testar')
+        ->tabela('teste')
         ->campos(['*'])
         //->limit(3,5)
+        ->GerarLog(true)
         ->buildQuery('select');
     print_r($dados);
 } catch(Exception $e) {

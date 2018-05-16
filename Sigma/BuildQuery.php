@@ -53,18 +53,23 @@ class BuildQuery implements iBuildQuery
     private $exception_not_found = true;
     private $msg_erro = false;
     private $query_union = '';
+    private static $logger = false, $file_handler = false;
 
     private function __construct(){}
 
     public static function init($driver, $host, $dbname, $user, $pass, $opcoes=false)
     {
+
         self::$driver = $driver;
         self::$host = $host;
         self::$dbname = $dbname;
         self::$user = $user;
         self::$pass = $pass;
         self::$opcoes = $opcoes;
-
+        self::$logger = new \Monolog\Logger('BDLOG');
+        $local_logs = isset($opcoes['dir_log']) ? $opcoes['dir_log'] : __DIR__.DIRECTORY_SEPARATOR;
+        $local_logs .= 'BuildQuery.log';
+        self::$file_handler = new \Monolog\Handler\StreamHandler($local_logs);
 
         switch (self::$driver)
         {
@@ -77,9 +82,9 @@ class BuildQuery implements iBuildQuery
             case "firebird":
                 $db = "firebird:";
                 break;
-			case "sqlite":
-				$db = "sqlite:";
-				break;
+            case "sqlite":
+                $db = "sqlite:";
+                break;
             default:
                 $err = "Driver inválido";
                 break;
@@ -91,11 +96,11 @@ class BuildQuery implements iBuildQuery
                 if($db == "firebird:")
                 {
                     $dsn = $db."dbname=".self::$host.':'.self::$dbname;
-                } 
-				elseif($db == "sqlite:")
-				{
-					$dsn = $db."".self::$host;
-				}
+                }
+                elseif($db == "sqlite:")
+                {
+                    $dsn = $db."".self::$host;
+                }
                 if(isset(self::$opcoes['port']))
                 {
                     $porta = self::$opcoes['port'];
@@ -127,12 +132,12 @@ class BuildQuery implements iBuildQuery
                 ];
 
                 if($db == "mysql:")
-				{
-				    $usar = isset(self::$opcoes['name_utf8_mysql']) ? self::$opcoes['name_utf8_mysql'] : false;
-					if((boolean) $usar) {
+                {
+                    $usar = isset(self::$opcoes['name_utf8_mysql']) ? self::$opcoes['name_utf8_mysql'] : false;
+                    if((boolean) $usar) {
                         $opcs[] = [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8'];
                     }
-				}
+                }
 
                 self::$con = new PDO($dsn, self::$user, self::$pass, $opcs);
                 return new self;
@@ -149,12 +154,48 @@ class BuildQuery implements iBuildQuery
         }
     }
 
+    protected function Log($msg, $type) {
+        self::$logger->pushHandler(self::$file_handler);
+        $configs_db = [ self::$driver,
+        self::$host,
+        self::$dbname,
+        self::$user];
+        $msg .= ' - DADOS DB: '.json_encode($configs_db);
+        switch( strtolower( $type ) )
+        {
+            case 'error':
+                self::$logger->addError($msg);
+                break;
+            case 'alert':
+                self::$logger->addAlert($msg);
+                break;
+            case 'critical':
+                self::$logger->addCritical($msg);
+                break;
+            case 'debug':
+                self::$logger->addDebug($msg);
+                break;
+            case 'emergency':
+                self::$logger->addEmergency($msg);
+                break;
+            case 'notice':
+                self::$logger->addNotice($msg);
+                break;
+            case 'record':
+                self::$logger->addRecord($msg);
+                break;
+            case 'warning':
+                self::$logger->addWarning($msg);
+                break;
+            default:
+                self::$logger->addInfo($msg);
+        }
+    }
 
     public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true) // Metódo genérico para execuções de sql no banco de dados
     {
         $query_analize = explode(" ", $query);
 
-        //print_r($parametros);
         if(is_array($query_analize) AND is_string($query))
         {
 
@@ -169,7 +210,7 @@ class BuildQuery implements iBuildQuery
                     $pdo_obj->beginTransaction();
 
                 }
-				$not_enabled = ['firebird','sqlite'];
+                $not_enabled = ['firebird','sqlite'];
                 if(!in_array(self::$driver, $not_enabled)) {
                     $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
                 }
@@ -183,21 +224,22 @@ class BuildQuery implements iBuildQuery
                         for($i = 0; $i < count($parametros); $i++)
                         {
                             $dados_query = $parametros[$i];
-							if(is_integer($dados_query)) 
-								$is_int = PDO::PARAM_INT;
-							elseif(is_bool($dados_query))
-								$is_int = PDO::PARAM_BOOL;
-							elseif(is_null($dados_query))
-								$is_int = PDO::PARAM_NULL;
-							else
-								$is_int = PDO::PARAM_STR;
+                            if(is_integer($dados_query))
+                                $is_int = PDO::PARAM_INT;
+                            elseif(is_bool($dados_query))
+                                $is_int = PDO::PARAM_BOOL;
+                            elseif(is_null($dados_query))
+                                $is_int = PDO::PARAM_NULL;
+                            else
+                                $is_int = PDO::PARAM_STR;
                             $data->bindValue(($i + 1), $parametros[$i], $is_int);
                         }
                     }
                     else
                     {
-                        var_dump($parametros);
-                        throw new Exception("É necessário passar um array não nulo", 002);
+                        $msg = 'É necessário passar um array não nulo';
+                        $this->Log($msg, 'error');
+                        throw new Exception($msg, 002);
                     }
                 }
                 if(isset($data1)) {
@@ -233,10 +275,12 @@ class BuildQuery implements iBuildQuery
                         if($usar_exception_nao_encontrado)
                         {
                             //GERAR EXCEPTION
+                            $this->Log($retorno_err[0].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
                             throw new Exception($retorno_err[0], $retorno_err[1]);
                         }
                         else
                         {
+                            $this->Log($retorno_err[1].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
                             //NÃO GERAR EXCEPTION
                             $retorno_suc = $retorno_err[1];
                         }
@@ -262,8 +306,10 @@ class BuildQuery implements iBuildQuery
                     $pdo_obj->rollBack();
                 }
                 $code = $e->getCode() == 710 ? $e->getCode() : 503;
+                $msg = $e->getMessage().' - Query ExecSql: '.$query;
+                $retorno_err = [$msg, $code];
+                $this->Log($msg.' - VALORES: '.json_encode($parametros), 'critical');
 
-                $retorno_err = [$e->getMessage().' - Query ExecSql: '.$query, $code];
                 throw new Exception($retorno_err[0], $retorno_err[1]);
             }
 
@@ -285,11 +331,11 @@ class BuildQuery implements iBuildQuery
                     $valor = $key[1];
                 }
                 $this->$key = $valor;
-
             }
         }
         return $this;
     }
+
     protected function create($tipo, $table)
     {
         $this->table = $table;
@@ -589,7 +635,7 @@ class BuildQuery implements iBuildQuery
                         elseif($i == count($campos) - 1)
                         {
                             $this->valores_insert[] = $valores[$i];
-                            $s .=	$oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ? )";
+                            $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ? )";
                             $this->whereComplex[] = $s;
                         }
                         else
@@ -790,13 +836,14 @@ class BuildQuery implements iBuildQuery
             $code_error = 006;
         }
 
-        if($this->msg_erro != false)
+        if(isset($this->msg_erro))
         {
-            $msg = (isset($msg)) ? $msg : $this->msg_erro;
-            if($msg != false) {
+            if($this->msg_erro != false) {
+                $msg = (isset($msg)) ? $msg : $this->msg_erro;
                 $code_erro_return = isset($code_error) ? $code_error : 405;
                 throw new Exception($msg, $code_erro_return);
             }
+
         }
 
         $campos_usar = (isset($this->campos_table)) ? implode(",",$this->campos_table) : "*";
@@ -993,8 +1040,9 @@ class BuildQuery implements iBuildQuery
         {
             if($this->gerar_log)
             {
-                $valores_query = json_encode($dados_insert_query);
-                $retorno = [$retorno, "query_sql" => $this->query_union." -> valores_query => ".$valores_query];
+                //$valores_query = json_encode($dados_insert_query);
+                $this->Log(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
+                //$retorno = [$retorno, "query_sql" => $this->query_union." -> valores_query => ".$valores_query];
             }
             $virar_false = [
                 'table',
@@ -1023,7 +1071,6 @@ class BuildQuery implements iBuildQuery
                 'valores_insert_bd' => [],
                 'valores_insert' => [],
                 'exception_not_found' => true];
-            
             $this->LimparValores($virar_false);
             $this->query_union = '';
         }
