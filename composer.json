@@ -1,8 +1,9 @@
 {
     "name": "sigma/build-query",
     "description": "A php build query using pdo. Databases available Mysql, Postgres, Firebird, SQlite",
+    "keywords": ["package", "dependency", "pdo", "buildquery"],
     "type": "library",
-    "license": "Apache",
+    "license": "MIT",
     "authors": [
         {
             "name": "Nathan Feitoza",
@@ -10,11 +11,13 @@
         }
     ],
     "minimum-stability": "beta",
+    "config": {
+        "platform": {
+            "php": "5.3.9"
+        }
+    },
     "require": {
         "monolog/monolog": "^1.23"
-    },
-    "require-dev":{
-        "phpunit/phpunit": "^6"
     },
     "autoload":{
         "psr-4":{

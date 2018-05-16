@@ -1,0 +1,1 @@
+[2018-05-16 11:41:03] BDLOG.INFO: {"0":[{"Id":"1","Nome":"Nathan"},{"Id":"2","Nome":"Feitoza"},{"Id":"3","Nome":null},{"Id":"4","Nome":null},{"Id":"5","Nome":"Alguem"},{"Id":"6","Nome":"Alguem 2"}],"query_sql":"SELECT * FROM teste","valores_query":[]} - DADOS DB: ["sqlite","\/var\/www\/html\/html\/sigmaBuildQuery\/sqlite\/teste.db",null,null] [] []
