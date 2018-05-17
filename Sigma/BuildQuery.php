@@ -560,10 +560,14 @@ class BuildQuery implements iBuildQuery
     // $insert = true, é para ser adicionado no banco, então retorna a ?
     protected function VerificarParentese($valor,$insert=false)  {
         preg_match("/\((.*?)\)/", $valor, $in_parenthesis);
+        $qntd_in_parenthesis = count($in_parenthesis);
+        $params_subs = $qntd_in_parenthesis >= 1 ? explode(',',$in_parenthesis[1]) : [];
+        $qntd_params = count($params_subs);
+        
         if($insert)
-            $valor = count($in_parenthesis) >= 1 ? "(".str_pad('?',(count($in_parenthesis) + 1),',?',STR_PAD_RIGHT).")" : '?';
+            $valor = $qntd_params > 0 ? "(".str_pad('?',($qntd_params + ($qntd_params - 1)),',?',STR_PAD_RIGHT).")" : '?';
         else
-            $valor = count($in_parenthesis) >= 1 ? explode(',',$in_parenthesis[1]) : $valor;
+            $valor = $qntd_params > 0 ? $params_subs : $valor;
 
         return $valor;
     }
