@@ -45,6 +45,8 @@ class BuildQuery implements iBuildQuery
     private $union = false;
     private $unionAll = false;
     private $comTransaction = false;
+    private $posTransaction = 'a';
+    private $fimTransaction = 'b';
     private $nao_encontrado_per = false;
     private $limite = false;
     private $offset = false;
@@ -191,7 +193,17 @@ class BuildQuery implements iBuildQuery
         }
     }
 
-    public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true) // Metódo genérico para execuções de sql no banco de dados
+    /**
+     * @param $query
+     * @param bool $parametros
+     * @param bool $usar_transacao
+     * @param bool $usar_exception_nao_encontrado
+     * @param int $pos_transaction -> Este parâmetro, e o que vem abaixo dele, fazem a verificação se o laço é o último e faz o commit ou o rollback
+     * @param int $fim_transaction
+     * @return bool|mixed
+     * @throws Exception
+     */
+    public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true, $pos_transaction='a', $fim_transaction='b') // Metódo genérico para execuções de sql no banco de dados
     {
         $query_analize = explode(" ", $query);
 
@@ -199,13 +211,14 @@ class BuildQuery implements iBuildQuery
         {
 
             $is_select = (strcmp(strtolower($query_analize[0]), "select") == 0) ? true : false;
-
+            $iniciar_transaction = $pos_transaction == $fim_transaction;
             try
             {
+
                 $pdo_obj = self::$con;
-                if($usar_transacao)
+                if($usar_transacao && $pos_transaction == 0)
                 {
-                    $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
+                    //$pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
                     $pdo_obj->beginTransaction();
 
                 }
@@ -258,7 +271,7 @@ class BuildQuery implements iBuildQuery
 
                     if(count($data_return) > 0)
                     {
-                        if($usar_transacao)
+                        if($usar_transacao AND $iniciar_transaction)
                         {
                             $pdo_obj->commit();
                         }
@@ -266,7 +279,7 @@ class BuildQuery implements iBuildQuery
                     }
                     else
                     {
-                        if($usar_transacao)
+                        if($usar_transacao AND $iniciar_transaction)
                         {
                             $pdo_obj->commit();
                         }
@@ -288,7 +301,7 @@ class BuildQuery implements iBuildQuery
                 }
                 else
                 {
-                    if($usar_transacao)
+                    if($usar_transacao AND $iniciar_transaction)
                     {
                         $pdo_obj->commit();
                     }
@@ -299,7 +312,6 @@ class BuildQuery implements iBuildQuery
 
             } catch (PDOException $e)
             {
-
                 if($usar_transacao)
                 {
                     $pdo_obj->rollBack();
@@ -318,16 +330,74 @@ class BuildQuery implements iBuildQuery
             throw new Exception("A Query passada não é válida", 003);
         }
     }
-    protected function LimparValores($array_valores) {
+    protected function LimparValores($union=false) {
+        $array_valores = [
+            'table',
+            'table_in',
+            'string_build',
+            'campos_table',
+            'where',
+            'whereOr',
+            'whereAnd',
+            'whereComplex',
+            'rightjoin',
+            'innerjoin',
+            'leftjoin',
+            'fullouterjoin',
+            'groupby',
+            'orderby',
+            'valores_add',
+            'list_inter',
+            'insertSelect',
+            'union',
+            'unionAll',
+            'comTransaction',
+            'posTransaction'=> ['a'],
+            'fimTransaction'=>['b'],
+            'limite',
+            'offset',
+            'query_union',
+            'valores_insert_bd' => [[]],
+            'valores_insert' => [[]],
+            'exception_not_found' => [true]];
+
+        if($union != false) {
+            $array_valores = ['table',
+                'table_in',
+                'string_build',
+                'campos_table',
+                'where',
+                'whereOr',
+                'whereAnd',
+                'whereComplex',
+                'rightjoin',
+                'innerjoin',
+                'leftjoin',
+                'fullouterjoin',
+                'groupby',
+                'orderby',
+                'valores_add',
+                'list_inter',
+                'insertSelect',
+                'union',
+                'unionAll',
+                'valores_insert' => [[]],
+                'comTransaction',
+                'posTransaction'=> ['a'],
+                'fimTransaction'=>['b'],
+                'limite',
+                'offset'];
+        }
         $novo_array = [];
+
         foreach ($this as $key => $value)
         {
-            if(in_array($key, $array_valores))
+
+            if(in_array($key, $array_valores) || array_key_exists($key, $array_valores))
             {
                 $valor = false;
-                if(is_array($key)) {
-                    $key = $key[0];
-                    $valor = $key[1];
+                if(array_key_exists($key, $array_valores)) {
+                    $valor = $array_valores[$key][0];
                 }
                 $this->$key = $valor;
             }
@@ -782,31 +852,8 @@ class BuildQuery implements iBuildQuery
 
     public function union($tipo=false)
     {
-        $virar_false = ['table',
-            'table_in',
-            'string_build',
-            'campos_table',
-            'where',
-            'whereOr',
-            'whereAnd',
-            'whereComplex',
-            'rightjoin',
-            'innerjoin',
-            'leftjoin',
-            'fullouterjoin',
-            'groupby',
-            'orderby',
-            'valores_add',
-            'list_inter',
-            'insertSelect',
-            'union',
-            'unionAll',
-            'valores_insert' => [],
-            'ComTransaction',
-            'limite',
-            'offset'];
 
-        $this->LimparValores($virar_false);
+        $this->LimparValores(true);
 
         switch( strtolower($tipo) )
         {
@@ -826,9 +873,11 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function ComTransaction()
+    public function ComTransaction($pos=2, $fim=1)
     {
         $this->comTransaction = true;
+        $this->posTransaction = $pos;
+        $this->fimTransaction = $fim;
         return $this;
     }
 
@@ -1065,11 +1114,11 @@ class BuildQuery implements iBuildQuery
 
                     $dados_insert_query = is_array($dados_insert_query) ? $dados_insert_query : [$dados_insert_query];
 
-                    $retorno = $this->ExecSql($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found);
+                    $retorno = $this->ExecSql($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction);
                 }
                 else
                 {
-                    $retorno = $this->ExecSql($this->query_union, false,$this->comTransaction, $this->exception_not_found);
+                    $retorno = $this->ExecSql($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction);
 
                 }
 
@@ -1094,34 +1143,8 @@ class BuildQuery implements iBuildQuery
                 $this->Log(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
                 //$retorno = [$retorno, "query_sql" => $this->query_union." -> valores_query => ".$valores_query];
             }
-            $virar_false = [
-                'table',
-                'table_in',
-                'string_build',
-                'campos_table',
-                'where',
-                'whereOr',
-                'whereAnd',
-                'whereComplex',
-                'rightjoin',
-                'innerjoin',
-                'leftjoin',
-                'fullouterjoin',
-                'groupby',
-                'orderby',
-                'valores_add',
-                'list_inter',
-                'insertSelect',
-                'union',
-                'unionAll',
-                'ComTransaction',
-                'limite',
-                'offset',
-                'query_union',
-                'valores_insert_bd' => [],
-                'valores_insert' => [],
-                'exception_not_found' => true];
-            $this->LimparValores($virar_false);
+
+            $this->LimparValores();
             $this->query_union = '';
         }
 
