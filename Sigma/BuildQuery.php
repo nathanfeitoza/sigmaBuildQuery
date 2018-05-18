@@ -218,7 +218,9 @@ class BuildQuery implements iBuildQuery
                 $pdo_obj = self::$con;
                 if($usar_transacao && $pos_transaction == 0)
                 {
-                    //$pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
+                    if(strtolower(self::$driver) == "firebird") {
+                        $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
+                    }
                     $pdo_obj->beginTransaction();
 
                 }
