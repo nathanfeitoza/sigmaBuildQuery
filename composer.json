@@ -10,7 +10,7 @@
             "email": "nathanfeitoza@outlook.com.br"
         }
     ],
-    "minimum-stability": "beta",
+    "minimum-stability": "dev",
     "config": {
         "platform": {
             "php": "5.3.9"
