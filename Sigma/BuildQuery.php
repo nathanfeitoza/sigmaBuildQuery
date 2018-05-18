@@ -563,7 +563,7 @@ class BuildQuery implements iBuildQuery
         $qntd_in_parenthesis = count($in_parenthesis);
         $params_subs = $qntd_in_parenthesis >= 1 ? explode(',',$in_parenthesis[1]) : [];
         $qntd_params = count($params_subs);
-        
+
         if($insert)
             $valor = $qntd_params > 0 ? "(".str_pad('?',($qntd_params + ($qntd_params - 1)),',?',STR_PAD_RIGHT).")" : '?';
         else
@@ -580,39 +580,39 @@ class BuildQuery implements iBuildQuery
         return $this->valores_insert;
     }
 
+    protected function PreAdjustWhere($tipo, $campo, $operador, $valor, $status_where = false) {
+        $valor_campo = "";
+        if(strcmp($operador, 'is') != 0) {
+            $valor_add = $this->VerificarParentese($valor);
+            if (is_array($valor_add)) {
+                $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+            } else {
+                $this->valores_insert[] = $valor_add;
+            }
+            $valor_campo = $this->VerificarParentese($valor, true);
+        } else {
+            $valor = is_null($valor) ? 'null' : $valor;
+            $operador .= ' '.$valor;
+        }
+        $this->WhereAdjust($tipo,$campo,$operador,$valor_campo, $status_where);
+    }
+
     public function where($campo,$operador,$valor)
     {
-        $valor_add = $this->VerificarParentese($valor);
-        if(is_array($valor_add)) {
-            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
-        } else {
-            $this->valores_insert[] = $valor_add;
-        }
-        $this->WhereAdjust("where",$campo,$operador,$this->VerificarParentese($valor, true));
+
+        $this->PreAdjustWhere("where",$campo,$operador,$valor);
         return $this;
     }
 
     public function whereOr($campo,$operador,$valor)
     {
-        $valor_add = $this->VerificarParentese($valor);
-        if(is_array($valor_add)) {
-            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
-        } else {
-            $this->valores_insert[] = $valor_add;
-        }
-        $this->WhereAdjust("or",$campo,$operador,$this->VerificarParentese($valor, true),$this->where);
+        $this->PreAdjustWhere("or",$campo,$operador,$valor,$this->where);
         return $this;
     }
 
     public function whereAnd($campo,$operador,$valor)
     {
-        $valor_add = $this->VerificarParentese($valor);
-        if(is_array($valor_add)) {
-            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
-        } else {
-            $this->valores_insert[] = $valor_add;
-        }
-        $this->WhereAdjust("and",$campo,$operador,$this->VerificarParentese($valor, true),$this->where);
+        $this->PreAdjustWhere("and",$campo,$operador,$valor,$this->where);
         return $this;
     }
 
@@ -664,12 +664,18 @@ class BuildQuery implements iBuildQuery
 
                     for($i = 0; $i < count($campos); $i++)
                     {
-                        $valor_add = $this->VerificarParentese($valores[$i]);
-                        $interrogacoes = $this->VerificarParentese($valores[$i], true);
-                        if(is_array($valor_add)) {
-                            $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+                        $interrogacoes = "";
+                        if(strcmp($operadores[$i], 'is') != 0) {
+                            $valor_add = $this->VerificarParentese($valores[$i]);
+                            $interrogacoes = $this->VerificarParentese($valores[$i], true);
+                            if (is_array($valor_add)) {
+                                $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+                            } else {
+                                $this->valores_insert[] = $valor_add;
+                            }
                         } else {
-                            $this->valores_insert[] = $valor_add;
+                            $valor_opera = is_null($valores[$i]) ? 'null' : $valores[$i];
+                            $operadores[$i] .= ' '.$valor_opera;
                         }
 
                         if($i == 0)
