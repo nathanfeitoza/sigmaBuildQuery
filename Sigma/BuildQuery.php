@@ -192,7 +192,9 @@ class BuildQuery implements iBuildQuery
                 self::$logger->addInfo($msg);
         }
     }
-
+    protected function PDO(){
+        return self::$con;
+    }
     /**
      * @param $query
      * @param bool $parametros
@@ -215,7 +217,8 @@ class BuildQuery implements iBuildQuery
             try
             {
 
-                $pdo_obj = self::$con;
+                $pdo_obj = $this->PDO();
+
                 if($usar_transacao && $pos_transaction == 0)
                 {
                     if(strtolower(self::$driver) == "firebird") {
@@ -588,6 +591,12 @@ class BuildQuery implements iBuildQuery
         }
 
 
+    }
+
+    public function FazerRoolback() {
+        if($this->PDO()->inTransaction()) {
+            $this->PDO()->rollback();
+        }
     }
 
     public function tabela($tabela)
