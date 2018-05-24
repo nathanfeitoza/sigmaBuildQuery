@@ -15,6 +15,8 @@ The methods of querybuilder are shown below:
         Note: The use of the entire query builder is done via polymorphism, which are being shown below. The choice by this method has been established because it looks more like sql queries and block building of codes. Therefore, it facilitates the life of the developer, being that the order of the elements will not change the final result, unless a main element such as -> table (string) is missing, but this check is already done and triggered in the log (to be implemented)
 
    ```php
+            $var->FazerRollback() // Rollback if there is any open transaction. Can be used when mixing code with transaction with no transaction. Obs: Does not polymorphism because it is a method of containment / prevention of errors
+            
             $var->tabela('teste') // Sets the usage table
             ->campos(array("terste1","teste2","teste3")) // Fields used to make select, one can only pass an empty array: [''], and it will search all the fields of the table, or ['*'], or the field names
             ->campos(array("terste1","teste2","teste3"),array("valor1","valor2","valor3")) // Fields and their respective values to be inserted or updated
@@ -40,6 +42,7 @@ The methods of querybuilder are shown below:
             ->campos(array("testar"), array("testarV"))
             ->buildQuery("select", true)
             ->union()
+            ->ComTransaction((contador atual) // This method activates the transaction and for this it is necessary to define the initial position of the counter and the final position. If it is not in a loop, you can put the values 1 and 1. But if it is in an array loop, for example, place ($ i, (count ($ array) - 1))
             ->tabela("teste4")
             ->campos(array("testar","testarheuhe"), array("testarV","testeF"))
             ->buildQuery("select");
