@@ -7,10 +7,10 @@
  */
 namespace Sigma;
 interface iBuildQuery{
-
     public static function init($driver, $host, $dbname, $user, $pass, $opcoes=false);
     public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true);
     public function tabela($tabela);
+    public function FazerRoolback();
     public function campos($campos,$update=false);
     public function where($campo,$operador,$valor);
     public function whereOr($campo,$operador,$valor);
@@ -25,7 +25,7 @@ interface iBuildQuery{
     public function orderby($campo, $tipo);
     public function insertSelect($tabela,$campos);
     public function union($tipo=false);
-    public function ComTransaction();
+    public function ComTransaction($pos=2, $fim=1);
     public function MsgNaoEncontrado($msg);
     public function limit($limite, $offset=false);
     public function GerarLog($gerar=true);
