@@ -224,7 +224,9 @@ class BuildQuery implements iBuildQuery
                     if(strtolower(self::$driver) == "firebird") {
                         $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
                     }
-                    $pdo_obj->beginTransaction();
+                    if(!$this->PDO()->inTransaction()) {
+                        $pdo_obj->beginTransaction();
+                    }
 
                 }
                 $not_enabled = ['firebird','sqlite'];
