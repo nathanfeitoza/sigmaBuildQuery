@@ -64,3 +64,27 @@ The methods of querybuilder are shown below:
                 ->buildQuery('insert');
         }
    ```
+   Varying number of values entered in table 2
+   ```php
+        $percorrer = 100;
+        $data = $this->getConBD()
+            ->tabela('teste')
+            ->campos(['log','testei'], ['teste-0', 1])
+            ->GerarLog(true)
+            ->TransacaoMultipla()
+            ->buildQuery('insert', true);
+        for($i = 0; $i < $percorrer; $i++) {
+                $add = 1;
+                $data->tabela('teste2')
+                ->campos(['nome','teste'], ['teste_tabela2-'.$i, $add])
+                ->GerarLog(true);
+                
+                if(($i+1) < $percorrer) {
+                    $data->TransacaoMultipla()
+                        ->buildQuery('insert', true);
+                } else {
+                    $data->CompletarTransacaoMultipla()
+                        ->buildQuery('insert');
+                }
+        }
+   ```
