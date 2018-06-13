@@ -54,6 +54,7 @@ class BuildQuery implements iBuildQuery
     private $exception_not_found = true;
     private $msg_erro = false;
     private $query_union = '';
+    private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
     private static $logger = false, $file_handler = false;
 
     private function __construct(){}
@@ -219,8 +220,9 @@ class BuildQuery implements iBuildQuery
 
                 $pdo_obj = $this->PDO();
 
-                if($usar_transacao && $pos_transaction == 0)
+                if($usar_transacao && $pos_transaction == 0 && !is_string($pos_transaction))
                 {
+
                     if(strtolower(self::$driver) == "firebird") {
                         $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
                     }
@@ -310,7 +312,14 @@ class BuildQuery implements iBuildQuery
                 {
                     if($usar_transacao AND $iniciar_transaction)
                     {
-                        $pdo_obj->commit();
+                       if($this->transacao_multipla)
+                       {
+                           if($this->finalizar_multipla) {
+                               $pdo_obj->commit();
+                           }
+                       } else {
+                           $pdo_obj->commit();
+                       }
                     }
                     $retorno_suc = true;
                 }
@@ -396,6 +405,12 @@ class BuildQuery implements iBuildQuery
                 'offset'];
         }
         $novo_array = [];
+
+        if($this->finalizar_multipla) {
+            $this->pos_multipla = 0;
+            $this->transacao_multipla = false;
+            $this->finalizar_multipla = false;
+        }
 
         foreach ($this as $key => $value)
         {
@@ -597,7 +612,7 @@ class BuildQuery implements iBuildQuery
 
     public function FazerRoolback() {
         if($this->PDO()->inTransaction()) {
-            $this->PDO()->rollback();
+            $this->PDO()->rollBack();
         }
     }
 
@@ -931,9 +946,22 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function buildQuery($tipo,$usando_union=false)
-    {
+    public function TransacaoMultipla() {
+        $this->transacao_multipla = true;
+        $this->comTransaction = true;
+        $this->posTransaction = $this->pos_multipla;
+        $this->pos_multipla++;
+        return $this;
+    }
 
+    public function CompletarTransacaoMultipla() {
+        $this->comTransaction = true;
+        $this->fimTransaction = $this->posTransaction;
+        $this->finalizar_multipla = true;
+        return $this;
+    }
+    public function buildQuery($tipo,$usando_union_transacao=false)
+    {
         $this->create($tipo,$this->table_in);
 
         if(isset($this->campos_table) AND !is_array($this->campos_table) AND $this->method != "DELETE")
@@ -1093,18 +1121,14 @@ class BuildQuery implements iBuildQuery
 
         }
 
-
-
         $this->query_union .= $union
             .$unionAll
             .$string_build;
         $this->valores_insert_bd[] = $this->valores_insert;
-
-        if(!$usando_union)
+        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true)
         {
             try
             {
-
                 $count_insert_bd = count($this->valores_insert_bd);
                 if($count_insert_bd > 0)
                 {
@@ -1132,7 +1156,10 @@ class BuildQuery implements iBuildQuery
                 else
                 {
                     $retorno = $this->ExecSql($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction);
+                }
 
+                if($this->transacao_multipla && $this->finalizar_multipla != true) {
+                    $retorno = $this;
                 }
 
             } catch(Exception $e)
@@ -1148,7 +1175,7 @@ class BuildQuery implements iBuildQuery
             $retorno = $this;
         }
 
-        if(!$usando_union)
+        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true)
         {
             if($this->gerar_log)
             {

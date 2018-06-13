@@ -47,3 +47,20 @@ The methods of querybuilder are shown below:
             ->campos(array("testar","testarheuhe"), array("testarV","testeF"))
             ->buildQuery("select");
    ```
+
+   Example using multiples tables with transactions
+   ```php
+        for($i = 0; $i < 100; $i++) {
+            $data = $this->getConBD()
+                ->tabela('teste')
+                ->campos(['log','testei'], ['teste-'.$i, 1])
+                ->GerarLog(true)
+                ->TransacaoMultipla()
+                ->buildQuery('insert', true)
+                ->tabela('teste2')
+                ->campos(['nome','teste'], ['teste_tabela2-'.$i, 1])
+                ->GerarLog(true)
+                ->CompletarTransacaoMultipla()
+                ->buildQuery('insert');
+        }
+   ```
