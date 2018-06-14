@@ -48,6 +48,21 @@ The methods of querybuilder are shown below:
             ->buildQuery("select");
    ```
 
+   Example using simple transaction
+   ```php
+        $total = 3;
+        $trans = $this->getConBD()->InicarTransacao(); // Is necessary for maintaining the PDO Object
+        for($i = 0; $i < $total; $i++) {
+            $dados_add = $i;
+            $data = $trans
+                ->tabela('teste')
+                ->campos(['log','testei'], ['teste-'.$i,$dados_add])
+                ->GerarLog(true)
+                ->comTransaction($i, ($total - 1))
+                ->buildQuery('insert');
+        }
+   ```
+
    Example using multiples tables with transactions
    ```php
         for($i = 0; $i < 100; $i++) {

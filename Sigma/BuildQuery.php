@@ -55,6 +55,7 @@ class BuildQuery implements iBuildQuery
     private $msg_erro = false;
     private $query_union = '';
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
+    protected $pdo_obj_usando = false;
     private static $logger = false, $file_handler = false;
 
     private function __construct(){}
@@ -159,9 +160,9 @@ class BuildQuery implements iBuildQuery
     protected function Log($msg, $type) {
         self::$logger->pushHandler(self::$file_handler);
         $configs_db = [ self::$driver,
-        self::$host,
-        self::$dbname,
-        self::$user];
+            self::$host,
+            self::$dbname,
+            self::$user];
         $msg .= ' - DADOS DB: '.json_encode($configs_db);
         switch( strtolower( $type ) )
         {
@@ -196,6 +197,11 @@ class BuildQuery implements iBuildQuery
     protected function PDO(){
         return self::$con;
     }
+
+    public function InicarTransacao(){
+        $this->pdo_obj_usando = $this->PDO();
+        return $this;
+    }
     /**
      * @param $query
      * @param bool $parametros
@@ -206,31 +212,25 @@ class BuildQuery implements iBuildQuery
      * @return bool|mixed
      * @throws Exception
      */
-    public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true, $pos_transaction='a', $fim_transaction='b') // Metódo genérico para execuções de sql no banco de dados
+    public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true, $pos_transaction='a', $fim_transaction='b', $pdo_obj_t=false) // Metódo genérico para execuções de sql no banco de dados
     {
         $query_analize = explode(" ", $query);
 
         if(is_array($query_analize) AND is_string($query))
         {
-
             $is_select = (strcmp(strtolower($query_analize[0]), "select") == 0) ? true : false;
             $iniciar_transaction = $pos_transaction == $fim_transaction;
+            $pdo_obj = $pdo_obj_t != false ? $pdo_obj_t : $this->PDO();
+            $pos_transaction = is_string($pos_transaction) ? 1 : $pos_transaction;
+            if($usar_transacao && $pos_transaction == 0 && !$pdo_obj->inTransaction())
+            {
+                if(strtolower(self::$driver) == "firebird") {
+                    $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
+                }
+                $pdo_obj->beginTransaction();
+            }
             try
             {
-
-                $pdo_obj = $this->PDO();
-
-                if($usar_transacao && $pos_transaction == 0 && !is_string($pos_transaction))
-                {
-
-                    if(strtolower(self::$driver) == "firebird") {
-                        $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
-                    }
-                    if(!$this->PDO()->inTransaction()) {
-                        $pdo_obj->beginTransaction();
-                    }
-
-                }
                 $not_enabled = ['firebird','sqlite'];
                 if(!in_array(self::$driver, $not_enabled)) {
                     $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
@@ -239,7 +239,6 @@ class BuildQuery implements iBuildQuery
 
                 if($parametros != false)
                 {
-
                     if(is_array($parametros) AND count($parametros) != 0)
                     {
                         for($i = 0; $i < count($parametros); $i++)
@@ -266,7 +265,8 @@ class BuildQuery implements iBuildQuery
                 if(isset($data1)) {
                     $data1->execute();
                 }
-                $data->execute();
+                $exec = $data->execute();
+
                 if($is_select)
                 {
                     $tipo_retorno = PDO::FETCH_OBJ; // Retorna tipo objetos
@@ -280,7 +280,7 @@ class BuildQuery implements iBuildQuery
 
                     if(count($data_return) > 0)
                     {
-                        if($usar_transacao AND $iniciar_transaction)
+                        if($usar_transacao AND $iniciar_transaction and $this->PDO()->inTransaction())
                         {
                             $pdo_obj->commit();
                         }
@@ -288,7 +288,7 @@ class BuildQuery implements iBuildQuery
                     }
                     else
                     {
-                        if($usar_transacao AND $iniciar_transaction)
+                        if($usar_transacao AND $iniciar_transaction and $this->PDO()->inTransaction())
                         {
                             $pdo_obj->commit();
                         }
@@ -310,25 +310,24 @@ class BuildQuery implements iBuildQuery
                 }
                 else
                 {
-                    if($usar_transacao AND $iniciar_transaction)
+                    if($usar_transacao and $iniciar_transaction /*and $pdo_obj->inTransaction()*/)
                     {
-                       if($this->transacao_multipla)
-                       {
-                           if($this->finalizar_multipla) {
-                               $pdo_obj->commit();
-                           }
-                       } else {
-                           $pdo_obj->commit();
-                       }
+                        if($this->transacao_multipla)
+                        {
+                            if($this->finalizar_multipla) {
+                                $pdo_obj->commit();
+                            }
+                        } else {
+                            $pdo_obj->commit();
+                        }
                     }
-                    $retorno_suc = true;
+                    $retorno_suc = $exec;
                 }
-
                 return $retorno_suc;
 
             } catch (PDOException $e)
             {
-                if($usar_transacao)
+                if($pdo_obj->inTransaction())
                 {
                     $pdo_obj->rollBack();
                 }
@@ -410,6 +409,10 @@ class BuildQuery implements iBuildQuery
             $this->pos_multipla = 0;
             $this->transacao_multipla = false;
             $this->finalizar_multipla = false;
+        }
+
+        if($this->posTransaction == $this->fimTransaction) {
+            $this->pdo_obj_usando = false;
         }
 
         foreach ($this as $key => $value)
@@ -1125,6 +1128,8 @@ class BuildQuery implements iBuildQuery
             .$unionAll
             .$string_build;
         $this->valores_insert_bd[] = $this->valores_insert;
+        $pdo_obj = $this->pdo_obj_usando != false ? $this->pdo_obj_usando : false;
+
         if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true)
         {
             try
@@ -1150,12 +1155,11 @@ class BuildQuery implements iBuildQuery
                     }
 
                     $dados_insert_query = is_array($dados_insert_query) ? $dados_insert_query : [$dados_insert_query];
-
-                    $retorno = $this->ExecSql($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction);
+                    $retorno = $this->ExecSql($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $pdo_obj);
                 }
                 else
                 {
-                    $retorno = $this->ExecSql($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction);
+                    $retorno = $this->ExecSql($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $pdo_obj);
                 }
 
                 if($this->transacao_multipla && $this->finalizar_multipla != true) {
