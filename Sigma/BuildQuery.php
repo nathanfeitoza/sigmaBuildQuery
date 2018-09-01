@@ -1,10 +1,11 @@
 <?php
 /**
  * Created by Nathan Feitoza.
- * User: dev01
- * Date: 30/04/18
- * Time: 08:45
+ * User: nathan
+ * Date: 11/09/17
+ * Time: 23:55
  */
+
 namespace Sigma;
 
 use PDO;
@@ -71,7 +72,8 @@ class BuildQuery implements iBuildQuery
         self::$opcoes = $opcoes;
         self::$logger = new \Monolog\Logger('BDLOG');
         $local_logs = isset($opcoes['dir_log']) ? $opcoes['dir_log'] : __DIR__.DIRECTORY_SEPARATOR;
-        $local_logs .= 'BuildQuery.log';
+        $nome_arquivo = date('d-m-Y');
+        $local_logs .= $nome_arquivo.'_BuildQuery.log';
         self::$file_handler = new \Monolog\Handler\StreamHandler($local_logs);
 
         switch (self::$driver)
@@ -323,6 +325,11 @@ class BuildQuery implements iBuildQuery
                     }
                     $retorno_suc = $exec;
                 }
+
+                if($this->gerar_log) {
+                    $this->Log(json_encode([$retorno_suc, "query_sql" => $query, "valores_query" => $parametros]), 'info');
+                }
+
                 return $retorno_suc;
 
             } catch (PDOException $e)
@@ -786,7 +793,7 @@ class BuildQuery implements iBuildQuery
                         elseif($i == count($campos) - 1)
                         {
                             //$this->valores_insert[] = $valores[$i];
-                            $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
+                            $s .=	$oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
                             $this->whereComplex[] = $s;
                         }
                         else
@@ -1184,7 +1191,7 @@ class BuildQuery implements iBuildQuery
             if($this->gerar_log)
             {
                 //$valores_query = json_encode($dados_insert_query);
-                $this->Log(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
+                //$this->Log(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
                 //$retorno = [$retorno, "query_sql" => $this->query_union." -> valores_query => ".$valores_query];
             }
 
