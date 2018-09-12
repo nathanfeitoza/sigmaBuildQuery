@@ -1,4 +1,4 @@
-<?php
+<?php 
 /**
  * Created by Nathan Feitoza.
  * User: nathan
@@ -56,7 +56,7 @@ class BuildQuery implements iBuildQuery
     private $msg_erro = false;
     private $query_union = '';
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
-    protected $pdo_obj_usando = false;
+    protected $pdo_obj_usando = false, $contarLinhasAfetadas = false;
     private static $logger = false, $file_handler = false;
 
     private function __construct(){}
@@ -323,7 +323,10 @@ class BuildQuery implements iBuildQuery
                             $pdo_obj->commit();
                         }
                     }
-                    $retorno_suc = $exec;
+                    $retorno_suc = $exec; // Retornos de INSERTS e UPDATES
+                    if($this->contarLinhasAfetadas) {
+                        $retorno_suc = ["AFETADAS"=>$data->rowCount()];
+                    }
                 }
 
                 if($this->gerar_log) {
@@ -793,7 +796,7 @@ class BuildQuery implements iBuildQuery
                         elseif($i == count($campos) - 1)
                         {
                             //$this->valores_insert[] = $valores[$i];
-                            $s .=	$oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
+                            $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
                             $this->whereComplex[] = $s;
                         }
                         else
@@ -970,6 +973,12 @@ class BuildQuery implements iBuildQuery
         $this->finalizar_multipla = true;
         return $this;
     }
+
+    public function ContarLinhasAfetadas(){
+        $this->contarLinhasAfetadas = true;
+        return $this;
+    }
+
     public function buildQuery($tipo,$usando_union_transacao=false)
     {
         $this->create($tipo,$this->table_in);
