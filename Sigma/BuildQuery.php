@@ -325,7 +325,7 @@ class BuildQuery implements iBuildQuery
                     }
                     $retorno_suc = $exec; // Retornos de INSERTS e UPDATES
                     if($this->contarLinhasAfetadas) {
-                        $retorno_suc = ["AFETADAS"=>$data->rowCount()];
+                        $retorno_suc = (object) ["AFETADAS"=>$data->rowCount()];
                     }
                 }
 
