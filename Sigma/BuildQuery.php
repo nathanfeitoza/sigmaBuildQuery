@@ -1,4 +1,4 @@
-<?php 
+<?php
 /**
  * Created by Nathan Feitoza.
  * User: nathan
@@ -42,6 +42,7 @@ class BuildQuery implements iBuildQuery
     private $list_inter = false;
     private $valores_insert = [];
     private $valores_insert_bd = [];
+    private $valores_insert_final = [];
     private $insertSelect = false;
     private $union = false;
     private $unionAll = false;
@@ -55,6 +56,7 @@ class BuildQuery implements iBuildQuery
     private $exception_not_found = true;
     private $msg_erro = false;
     private $query_union = '';
+    private $retorno_personalizado = false;
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
     protected $pdo_obj_usando = false, $contarLinhasAfetadas = false;
     private static $logger = false, $file_handler = false;
@@ -381,15 +383,18 @@ class BuildQuery implements iBuildQuery
             'fimTransaction'=>['b'],
             'limite',
             'offset',
+            'retorno_personalizado',
             'query_union',
             'valores_insert_bd' => [[]],
             'valores_insert' => [[]],
+            'valores_insert_final' => [[]],
             'exception_not_found' => [true]];
 
         if($union != false) {
             $array_valores = ['table',
                 'table_in',
                 'string_build',
+                'retorno_personalizado',
                 'campos_table',
                 'where',
                 'whereOr',
@@ -407,6 +412,7 @@ class BuildQuery implements iBuildQuery
                 'union',
                 'unionAll',
                 'valores_insert' => [[]],
+                'valores_insert_final' => [[]],
                 'comTransaction',
                 'posTransaction'=> ['a'],
                 'fimTransaction'=>['b'],
@@ -573,19 +579,19 @@ class BuildQuery implements iBuildQuery
         }
         elseif(isset($leftjoin))
         {
-            return $this->leftjoin = $leftjoin;
+            return $this->leftjoin[] = $leftjoin;
         }
         elseif(isset($rightjoin))
         {
-            return $this->rightjoin = $rightjoin;
+            return $this->rightjoin[] = $rightjoin;
         }
         elseif(isset($innerjoin))
         {
-            return $this->innerjoin = $innerjoin;
+            return $this->innerjoin[] = $innerjoin;
         }
         elseif(isset($fullouterjoin))
         {
-            return $this->fullouterjoin = $fullouterjoin;
+            return $this->fullouterjoin[] = $fullouterjoin;
         }
         else
         {
@@ -936,12 +942,13 @@ class BuildQuery implements iBuildQuery
             $this->limite = $limite;
             $this->offset = $offset;
 
-            $this->valores_insert[] = (int) $limite;
+            $this->valores_insert_final[] = (int) $limite;
+            //$this->valores_insert[] = (int) $limite;
         }
 
         if($offset != false)
         {
-            $this->valores_insert[] = (int) $offset;
+            $this->valores_insert_final[] = (int) $offset;
         }
 
         return $this;
@@ -977,6 +984,14 @@ class BuildQuery implements iBuildQuery
     public function ContarLinhasAfetadas(){
         $this->contarLinhasAfetadas = true;
         return $this;
+    }
+
+    public function RetornoPersonalizado($retorno){
+        if(!is_array($retorno)) {
+            throw new Exception('Tipo de retorno personalizado não é um array',8);
+        }
+       $this->retorno_personalizado = $retorno;
+       return $this;
     }
 
     public function buildQuery($tipo,$usando_union_transacao=false)
@@ -1016,16 +1031,17 @@ class BuildQuery implements iBuildQuery
         $msg_nao_encontrado = ($this->nao_encontrado_per != false) ? $this->nao_encontrado_per : 'Nada Encontrado';
 
         // Joins
-        $leftjoin = ($this->leftjoin != false) ? $this->leftjoin : "";
-        $rightjoin = ($this->rightjoin != false) ? $this->rightjoin : "";
-        $innerjoin = ($this->innerjoin != false) ? $this->innerjoin : "";
-        $fullouterjoin = ($this->fullouterjoin != false) ? $this->fullouterjoin : "";
+        $leftjoin = ($this->leftjoin != false) ? implode(' ',$this->leftjoin) : "";
+        $rightjoin = ($this->rightjoin != false) ? implode(' ',$this->rightjoin) : "";
+        $innerjoin = ($this->innerjoin != false) ? implode(' ',$this->innerjoin) : "";
+        $fullouterjoin = ($this->fullouterjoin != false) ? implode(' ',$this->fullouterjoin) : "";
         // Fim Joins
 
         $groupby = ($this->groupby != false) ? $this->groupby." " : "";
         $limite = ((string) $this->limite != false) ? ' LIMIT ?' : "";
         $limite = ( (string) $this->offset != false) ? $limite.' OFFSET ?' : $limite;
 
+        $retorno_personalizado = $this->retorno_personalizado;
 
         if($this->method == "SELECT") {
 
@@ -1171,6 +1187,9 @@ class BuildQuery implements iBuildQuery
                     }
 
                     $dados_insert_query = is_array($dados_insert_query) ? $dados_insert_query : [$dados_insert_query];
+                    if(count($this->valores_insert_final) > 0) {
+                        $dados_insert_query = array_merge($dados_insert_query, $this->valores_insert_final);
+                    }
                     $retorno = $this->ExecSql($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $pdo_obj);
                 }
                 else
@@ -1208,6 +1227,9 @@ class BuildQuery implements iBuildQuery
             $this->query_union = '';
         }
 
+        if($retorno_personalizado != false) {
+            return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
+        }
         return $retorno;
     }
 

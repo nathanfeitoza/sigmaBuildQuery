@@ -32,5 +32,7 @@ interface iBuildQuery{
     public function UsarExceptionNaoEncontrado($usar=true);
     public function TransacaoMultipla();
     public function CompletarTransacaoMultipla();
+    public function ContarLinhasAfetadas();
+    public function RetornoPersonalizado($retorno);
     public function buildQuery($tipo,$usando_union=false);
 }

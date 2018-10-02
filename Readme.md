@@ -47,6 +47,8 @@ The methods of querybuilder are shown below:
             ->ComTransaction((contador atual) // This method activates the transaction and for this it is necessary to define the initial position of the counter and the final position. If it is not in a loop, you can put the values 1 and 1. But if it is in an array loop, for example, place ($ i, (count ($ array) - 1))
             ->tabela("teste4")
             ->campos(array("testar","testarheuhe"), array("testarV","testeF"))
+            ->ContarLinhasAfetadas() // Count affected lines (for update, delete and insert)
+            ->RetornoPersonalizado($retorno) // Personalizated return
             ->buildQuery("select");
    ```
 
