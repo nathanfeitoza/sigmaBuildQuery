@@ -58,8 +58,10 @@ class BuildQuery implements iBuildQuery
     private $query_union = '';
     private $retorno_personalizado = false;
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
-    protected $pdo_obj_usando = false, $contarLinhasAfetadas = false;
+    protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false;
+    protected $pdo_padrao = false, $gravando_log = false;
     private static $logger = false, $file_handler = false;
+    public $GravarLogComplexo;
 
     private function __construct(){}
 
@@ -198,8 +200,15 @@ class BuildQuery implements iBuildQuery
                 self::$logger->addInfo($msg);
         }
     }
+
+    protected function SetPDO($pdo) {
+        $this->pdo_padrao = $pdo;
+    }
+
     protected function PDO(){
-        return self::$con;
+        $this->pdo_padrao = !$this->pdo_padrao ? self::$con : $this->pdo_padrao;
+        return $this->pdo_padrao;
+
     }
 
     public function InicarTransacao(){
@@ -224,7 +233,10 @@ class BuildQuery implements iBuildQuery
         {
             $is_select = (strcmp(strtolower($query_analize[0]), "select") == 0) ? true : false;
             $iniciar_transaction = $pos_transaction == $fim_transaction;
-            $pdo_obj = $pdo_obj_t != false ? $pdo_obj_t : $this->PDO();
+            if($pdo_obj_t != false) {
+                $this->SetPDO($pdo_obj_t);
+            }
+            $pdo_obj = $this->PDO(); //$pdo_obj_t != false ? $pdo_obj_t :
             $pos_transaction = is_string($pos_transaction) ? 1 : $pos_transaction;
             if($usar_transacao && $pos_transaction == 0 && !$pdo_obj->inTransaction())
             {
@@ -994,6 +1006,27 @@ class BuildQuery implements iBuildQuery
        return $this;
     }
 
+    public function EventosGravar($eventos) {
+        if(is_array($eventos)) {
+            $this->eventos_gravar = @array_map('strtoupper', $eventos);
+        } else {
+            throw new Exception('Os tipos de eventos passados não são um array', 15165);
+        }
+        return $this;
+    }
+
+    public function LogandoComplexo() {
+        $this->gravando_log = true;
+        return $this;
+    }
+
+    protected function LogComplexo($type,$act) {
+        if($type != false AND $this->eventos_gravar != false) {
+            if(in_array($act->method, $this->eventos_gravar)) {
+                $type($act, $act->method);
+            }
+        }
+    }
     public function buildQuery($tipo,$usando_union_transacao=false)
     {
         $this->create($tipo,$this->table_in);
@@ -1230,6 +1263,10 @@ class BuildQuery implements iBuildQuery
         if($retorno_personalizado != false) {
             return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
         }
+        //if($retorno != $this) {
+            if($this->gravando_log == false)
+                $this->LogComplexo($this->GravarLogComplexo, $this);
+        //}
         return $retorno;
     }
 

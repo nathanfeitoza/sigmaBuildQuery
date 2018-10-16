@@ -107,3 +107,10 @@ The methods of querybuilder are shown below:
                 }
         }
    ```
+
+   Use log complex or events in database
+      ```php
+        $var->EventosGravar(['INSERT','DELETE','UPDATE'])->GravarLogComplexo = function($con, $acao) {
+           $this->GravarLogSC($acao,$con);
+        };
+   ```
