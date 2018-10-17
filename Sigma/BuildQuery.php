@@ -1015,7 +1015,7 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function LogandoComplexo() {
+    protected function LogandoComplexo() {
         $this->gravando_log = true;
         return $this;
     }
@@ -1023,7 +1023,7 @@ class BuildQuery implements iBuildQuery
     protected function LogComplexo($type,$act) {
         if($type != false AND $this->eventos_gravar != false) {
             if(in_array($act->method, $this->eventos_gravar)) {
-                $type($act, $act->method);
+                $type($act->LogandoComplexo(), $act->method);
             }
         }
     }
