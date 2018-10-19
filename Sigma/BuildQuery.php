@@ -1015,7 +1015,7 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    protected function LogandoComplexo() {
+    public function LogandoComplexo() {
         $this->gravando_log = true;
         return $this;
     }
@@ -1264,8 +1264,10 @@ class BuildQuery implements iBuildQuery
             return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
         }
         //if($retorno != $this) {
-            if($this->gravando_log == false)
+            if($this->gravando_log == false) {
                 $this->LogComplexo($this->GravarLogComplexo, $this);
+                $this->gravando_log = true;
+            }
         //}
         return $retorno;
     }
