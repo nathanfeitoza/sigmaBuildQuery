@@ -533,11 +533,11 @@ class BuildQuery implements iBuildQuery
         }
         elseif(isset($whereAnd))
         {
-            return $this->whereAnd = $whereAnd;
+            return $this->whereAnd[] = $whereAnd;
         }
         elseif(isset($whereOr))
         {
-            return $this->whereOr = $whereOr;
+            return $this->whereOr[] = $whereOr;
         }
 
     }
@@ -1055,8 +1055,20 @@ class BuildQuery implements iBuildQuery
 
         $campos_usar = (isset($this->campos_table) && $this->campos_table != false) ? implode(",",$this->campos_table) : "*";
         $where = ($this->where != false) ? " ".$this->where : "";
-        $whereOr = ($this->whereOr != false ) ? " ".implode(" ",$this->whereOr) : "";
-        $whereAnd = ($this->whereAnd != false ) ? " ".implode(" ",$this->whereAnd) : "";
+        $whereOr = "";
+        $whereAnd = "";
+        if($this->whereOr != false ) {
+            foreach ($this->whereOr as $i_or => $or_w) {
+                $whereOr .= " ".$or_w[0];
+            }
+        }
+
+        if($this->whereAnd != false ) {
+            foreach ($this->whereAnd as $i_and => $and_w) {
+                $whereAnd .= " ".$and_w[0];
+            }
+        }
+
         $whereComplex = ($this->whereComplex != false) ? " ".implode(" ",$this->whereComplex) : "";
         $orderby = ($this->orderby != false) ? " ".$this->orderby : "";
         $union = ($this->union != false && $this->unionAll == false) ? $this->union : '';
@@ -1246,7 +1258,6 @@ class BuildQuery implements iBuildQuery
         {
             $retorno = $this;
         }
-
         if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true)
         {
             if($this->gerar_log)
@@ -1264,6 +1275,7 @@ class BuildQuery implements iBuildQuery
             return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
         }
         //if($retorno != $this) {
+
             if($this->gravando_log == false) {
                 $this->LogComplexo($this->GravarLogComplexo, $this);
                 $this->gravando_log = true;
