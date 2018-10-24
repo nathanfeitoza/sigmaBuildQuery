@@ -511,9 +511,9 @@ class BuildQuery implements iBuildQuery
                 else
                 {
                     if ($tipo == "or") {
-                        $whereOr[] = "OR " . $campo . " " . $operador . " " . $valor;
+                        $whereOr = "OR " . $campo . " " . $operador . " " . $valor;
                     } else {
-                        $whereAnd[] = "AND " . $campo . " " . $operador . " " . $valor;
+                        $whereAnd = "AND " . $campo . " " . $operador . " " . $valor;
                     }
                 }
             }
@@ -1055,21 +1055,10 @@ class BuildQuery implements iBuildQuery
 
         $campos_usar = (isset($this->campos_table) && $this->campos_table != false) ? implode(",",$this->campos_table) : "*";
         $where = ($this->where != false) ? " ".$this->where : "";
-        $whereOr = "";
-        $whereAnd = "";
-        if($this->whereOr != false ) {
-            foreach ($this->whereOr as $i_or => $or_w) {
-                $whereOr .= " ".$or_w[0];
-            }
-        }
-
-        if($this->whereAnd != false ) {
-            foreach ($this->whereAnd as $i_and => $and_w) {
-                $whereAnd .= " ".$and_w[0];
-            }
-        }
 
         $whereComplex = ($this->whereComplex != false) ? " ".implode(" ",$this->whereComplex) : "";
+        $whereAnd = $this->whereAnd != false ? " ".implode(" ",$this->whereAnd) : '';
+        $whereOr = $this->whereOr != false ? " ".implode(" ",$this->whereOr) : '';
         $orderby = ($this->orderby != false) ? " ".$this->orderby : "";
         $union = ($this->union != false && $this->unionAll == false) ? $this->union : '';
         $unionAll = ($this->union == false && $this->unionAll != false) ? $this->unionAll : '';
