@@ -613,7 +613,7 @@ class BuildQuery implements iBuildQuery
         return $this;
 
     }
-    
+
     // $insert = true, é para ser adicionado no banco, então retorna a ?
     protected function verificarParentese($valor,$insert=false)
     {
@@ -903,7 +903,7 @@ class BuildQuery implements iBuildQuery
         return $this->linhas_afetadas;
     }
 
-    public function getRetornarLinhasAfetadas()
+    public function setRetornarLinhasAfetadas()
     {
         $this->contarLinhasAfetadas = true;
         return $this;
