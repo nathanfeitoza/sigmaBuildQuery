@@ -32,12 +32,12 @@ class BuildQuery implements iBuildQuery
     private $whereOr = false;
     private $whereAnd = false;
     private $whereComplex = false;
-    private $rightjoin = false;
-    private $innerjoin = false;
-    private $leftjoin = false;
-    private $fullouterjoin = false;
-    private $groupby = false;
-    private $orderby = false;
+    private $rightJoin = false;
+    private $innerJoin = false;
+    private $leftJoin = false;
+    private $fullOuterJoin = false;
+    private $groupBy = false;
+    private $orderBy = false;
     private $valores_add = false;
     private $list_inter = false;
     private $valores_insert = [];
@@ -47,6 +47,7 @@ class BuildQuery implements iBuildQuery
     private $union = false;
     private $unionAll = false;
     private $comTransaction = false;
+    private $fazer_rollback = false;
     private $posTransaction = 'a';
     private $fimTransaction = 'b';
     private $nao_encontrado_per = false;
@@ -57,17 +58,17 @@ class BuildQuery implements iBuildQuery
     private $msg_erro = false;
     private $query_union = '';
     private $retorno_personalizado = false;
+    private $linhas_afetadas = 0;
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
     protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false;
-    protected $pdo_padrao = false, $gravando_log = false;
+    protected $pdo_padrao = false, $gravar_log_complexo = false, $dados_select_transacao;
     private static $logger = false, $file_handler = false;
-    public $GravarLogComplexo;
+    public $gravarsetLogComplexo;
 
     private function __construct(){}
 
     public static function init($driver, $host, $dbname, $user, $pass, $opcoes=false)
     {
-
         self::$driver = $driver;
         self::$host = $host;
         self::$dbname = $dbname;
@@ -80,8 +81,7 @@ class BuildQuery implements iBuildQuery
         $local_logs .= $nome_arquivo.'_BuildQuery.log';
         self::$file_handler = new \Monolog\Handler\StreamHandler($local_logs);
 
-        switch (self::$driver)
-        {
+        switch (self::$driver) {
             case "postgres":
                 $db = "pgsql:";
                 break;
@@ -98,34 +98,27 @@ class BuildQuery implements iBuildQuery
                 $err = "Driver inválido";
                 break;
         }
-        if(!isset($err))
-        {
+
+        if(!isset($err)) {
             try {
                 $dsn = self::$dbname != false ? $db . "host=" . self::$host . ";dbname=" . self::$dbname :  $db . "host=" . self::$host;
-                if($db == "firebird:")
-                {
+                if($db == "firebird:") {
                     $dsn = $db."dbname=".self::$host.':'.self::$dbname;
                 }
-                elseif($db == "sqlite:")
-                {
+                elseif($db == "sqlite:") {
                     $dsn = $db."".self::$host;
                 }
-                if(isset(self::$opcoes['port']))
-                {
+                if(isset(self::$opcoes['port'])) {
                     $porta = self::$opcoes['port'];
-                    if(is_numeric($porta))
-                    {
+                    if(is_numeric($porta)) {
                         $dsn = $dsn.";port=".(int) $porta;
                     }
                 }
                 $pdo_case = PDO::CASE_NATURAL;
-                if(isset(self::$opcoes['nome_campos']))
-                {
+                if(isset(self::$opcoes['nome_campos'])) {
                     $nome_campos = self::$opcoes['nome_campos'];
-                    if(!empty($nome_campos))
-                    {
-                        switch ( strtolower( $nome_campos ) )
-                        {
+                    if(!empty($nome_campos)) {
+                        switch ( strtolower( $nome_campos ) ) {
                             case 'mai':
                                 $pdo_case = PDO::CASE_UPPER;
                                 break;
@@ -140,8 +133,7 @@ class BuildQuery implements iBuildQuery
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
                 ];
 
-                if($db == "mysql:")
-                {
+                if($db == "mysql:") {
                     $usar = isset(self::$opcoes['name_utf8_mysql']) ? self::$opcoes['name_utf8_mysql'] : false;
                     if((boolean) $usar) {
                         $opcs[] = [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8'];
@@ -155,23 +147,21 @@ class BuildQuery implements iBuildQuery
                 $msg = "ERRO DE CONEXÃO " . $e->getMessage();
                 throw new Exception($msg, $e->getCode());
             }
-        }
-        else
-        {
+        } else {
             $msg = "DRIVER INVÁLIDO";
             throw new Exception($msg, 001);
         }
     }
 
-    protected function Log($msg, $type) {
+    protected function setLog($msg, $type)
+    {
         self::$logger->pushHandler(self::$file_handler);
         $configs_db = [ self::$driver,
             self::$host,
             self::$dbname,
             self::$user];
         $msg .= ' - DADOS DB: '.json_encode($configs_db);
-        switch( strtolower( $type ) )
-        {
+        switch( strtolower( $type ) ) {
             case 'error':
                 self::$logger->addError($msg);
                 break;
@@ -201,20 +191,23 @@ class BuildQuery implements iBuildQuery
         }
     }
 
-    protected function SetPDO($pdo) {
+    protected function setPDO($pdo)
+    {
         $this->pdo_padrao = $pdo;
     }
 
-    protected function PDO(){
+    protected function pdo()
+    {
         $this->pdo_padrao = !$this->pdo_padrao ? self::$con : $this->pdo_padrao;
         return $this->pdo_padrao;
-
     }
 
-    public function InicarTransacao(){
-        $this->pdo_obj_usando = $this->PDO();
+    public function setInicarTransacao()
+    {
+        $this->pdo_obj_usando = $this->pdo();
         return $this;
     }
+
     /**
      * @param $query
      * @param bool $parametros
@@ -225,40 +218,35 @@ class BuildQuery implements iBuildQuery
      * @return bool|mixed
      * @throws Exception
      */
-    public function ExecSql($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true, $pos_transaction='a', $fim_transaction='b', $pdo_obj_t=false) // Metódo genérico para execuções de sql no banco de dados
-    {
+    public function executarSQL($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true, $pos_transaction='a', $fim_transaction='b', $rollback=false, $pdo_obj_t=false)
+    { // Metódo genérico para execuções de sql no banco de dados
         $query_analize = explode(" ", $query);
 
-        if(is_array($query_analize) AND is_string($query))
-        {
+        if(is_array($query_analize) AND is_string($query)) {
             $is_select = (strcmp(strtolower($query_analize[0]), "select") == 0) ? true : false;
             $iniciar_transaction = $pos_transaction == $fim_transaction;
             if($pdo_obj_t != false) {
-                $this->SetPDO($pdo_obj_t);
+                $this->setPDO($pdo_obj_t);
             }
-            $pdo_obj = $this->PDO(); //$pdo_obj_t != false ? $pdo_obj_t :
+            $pdo_obj = $this->pdo(); //$pdo_obj_t != false ? $pdo_obj_t :
             $pos_transaction = is_string($pos_transaction) ? 1 : $pos_transaction;
-            if($usar_transacao && $pos_transaction == 0 && !$pdo_obj->inTransaction())
-            {
+            if($usar_transacao && $pos_transaction == 0 && !$pdo_obj->inTransaction()) {
                 if(strtolower(self::$driver) == "firebird") {
                     $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
                 }
                 $pdo_obj->beginTransaction();
             }
-            try
-            {
+
+            try {
                 $not_enabled = ['firebird','sqlite'];
                 if(!in_array(self::$driver, $not_enabled)) {
                     $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
                 }
                 $data = $pdo_obj->prepare($query);
 
-                if($parametros != false)
-                {
-                    if(is_array($parametros) AND count($parametros) != 0)
-                    {
-                        for($i = 0; $i < count($parametros); $i++)
-                        {
+                if($parametros != false) {
+                    if(is_array($parametros) AND count($parametros) != 0) {
+                        for($i = 0; $i < count($parametros); $i++) {
                             $dados_query = $parametros[$i];
                             if(is_integer($dados_query))
                                 $is_int = PDO::PARAM_INT;
@@ -270,11 +258,9 @@ class BuildQuery implements iBuildQuery
                                 $is_int = PDO::PARAM_STR;
                             $data->bindValue(($i + 1), $parametros[$i], $is_int);
                         }
-                    }
-                    else
-                    {
+                    } else {
                         $msg = 'É necessário passar um array não nulo';
-                        $this->Log($msg, 'error');
+                        $this->setLog($msg, 'error');
                         throw new Exception($msg, 002);
                     }
                 }
@@ -283,93 +269,89 @@ class BuildQuery implements iBuildQuery
                 }
                 $exec = $data->execute();
 
-                if($is_select)
-                {
+                if($is_select) {
                     $tipo_retorno = PDO::FETCH_OBJ; // Retorna tipo objetos
-                    if(isset(self::$opcoes['return_type']))
-                    {
+                    if(isset(self::$opcoes['return_type'])) {
                         if((int) self::$opcoes['return_type'] == 2) {
                             $tipo_retorno = PDO::FETCH_NAMED; // Retorna Tipo array
                         }
                     }
                     $data_return = $data->fetchAll($tipo_retorno);
 
-                    if(count($data_return) > 0)
-                    {
-                        if($usar_transacao AND $iniciar_transaction and $this->PDO()->inTransaction())
-                        {
-                            $pdo_obj->commit();
+                    if(count($data_return) > 0) {
+                        if($usar_transacao AND $iniciar_transaction and $this->pdo()->inTransaction()) {
+                            if($rollback)
+                                $pdo_obj->rollBack();
+                            else
+                                $pdo_obj->commit();
                         }
                         $retorno_suc =  $data_return;
-                    }
-                    else
-                    {
-                        if($usar_transacao AND $iniciar_transaction and $this->PDO()->inTransaction())
-                        {
-                            $pdo_obj->commit();
+                    } else {
+                        if($usar_transacao AND $iniciar_transaction and $this->pdo()->inTransaction()) {
+                            // Comentado pois, foi adicionado o retorno dos dados de um select dentro de uma transação, e, esta linha estava fazendo o commit da transacao
+                            //$pdo_obj->commit();
                         }
                         $retorno_err = ["Nada encontrado",710];
-                        if($usar_exception_nao_encontrado)
-                        {
+                        if($usar_exception_nao_encontrado) {
                             //GERAR EXCEPTION
-                            $this->Log($retorno_err[0].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
+                            $this->setLog($retorno_err[0].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
                             throw new Exception($retorno_err[0], $retorno_err[1]);
-                        }
-                        else
-                        {
-                            $this->Log($retorno_err[1].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
+                        } else {
+                            $this->setLog($retorno_err[1].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
                             //NÃO GERAR EXCEPTION
                             $retorno_suc = $retorno_err[1];
                         }
                     }
 
-                }
-                else
-                {
-                    if($usar_transacao and $iniciar_transaction /*and $pdo_obj->inTransaction()*/)
-                    {
-                        if($this->transacao_multipla)
-                        {
-                            if($this->finalizar_multipla) {
-                                $pdo_obj->commit();
-                            }
-                        } else {
-                            $pdo_obj->commit();
-                        }
-                    }
-                    $retorno_suc = $exec; // Retornos de INSERTS e UPDATES
+                } else {
                     if($this->contarLinhasAfetadas) {
                         $retorno_suc = (object) ["AFETADAS"=>$data->rowCount()];
+                        $this->setLinhasAfetadas($retorno_suc);
                     }
+
+                    if($usar_transacao and $iniciar_transaction /*and $pdo_obj->inTransaction()*/) {
+                        if($this->transacao_multipla) {
+                            if($this->finalizar_multipla) {
+                                if($rollback)
+                                    $pdo_obj->rollBack();
+                                else
+                                    $pdo_obj->commit();
+                            }
+                        } else {
+                            if($rollback)
+                                $pdo_obj->rollBack();
+                            else
+                                $pdo_obj->commit();
+                        }
+                    }
+                    $retorno_suc = $this->contarLinhasAfetadas ? $retorno_suc : $exec; // Retornos de INSERTS e UPDATES
                 }
 
                 if($this->gerar_log) {
-                    $this->Log(json_encode([$retorno_suc, "query_sql" => $query, "valores_query" => $parametros]), 'info');
+                    $this->setLog(json_encode([$retorno_suc, "query_sql" => $query, "valores_query" => $parametros]), 'info');
                 }
 
                 return $retorno_suc;
 
-            } catch (PDOException $e)
-            {
-                if($pdo_obj->inTransaction())
-                {
+            } catch (PDOException $e) {
+                if($pdo_obj->inTransaction()) {
                     $pdo_obj->rollBack();
                 }
                 $code = $e->getCode() == 710 ? $e->getCode() : 503;
-                $msg = $e->getMessage().' - Query ExecSql: '.$query;
+                $msg = $e->getMessage().' - Query executarSQL: '.$query;
                 $retorno_err = [$msg, $code];
-                $this->Log($msg.' - VALORES: '.json_encode($parametros), 'critical');
+                $this->setLog($msg.' - VALORES: '.json_encode($parametros), 'critical');
 
                 throw new Exception($retorno_err[0], $retorno_err[1]);
             }
 
-        }
-        else
-        {
+        } else {
             throw new Exception("A Query passada não é válida", 003);
         }
     }
-    protected function LimparValores($union=false) {
+
+    protected function limparValores($union=false)
+    {
         $array_valores = [
             'table',
             'table_in',
@@ -379,18 +361,19 @@ class BuildQuery implements iBuildQuery
             'whereOr',
             'whereAnd',
             'whereComplex',
-            'rightjoin',
-            'innerjoin',
-            'leftjoin',
-            'fullouterjoin',
-            'groupby',
-            'orderby',
+            'rightJoin',
+            'innerJoin',
+            'leftJoin',
+            'fullOuterJoin',
+            'groupBy',
+            'orderBy',
             'valores_add',
             'list_inter',
             'insertSelect',
             'union',
             'unionAll',
             'comTransaction',
+            'fazer_rollback',
             'posTransaction'=> ['a'],
             'fimTransaction'=>['b'],
             'limite',
@@ -412,12 +395,12 @@ class BuildQuery implements iBuildQuery
                 'whereOr',
                 'whereAnd',
                 'whereComplex',
-                'rightjoin',
-                'innerjoin',
-                'leftjoin',
-                'fullouterjoin',
-                'groupby',
-                'orderby',
+                'rightJoin',
+                'innerJoin',
+                'leftJoin',
+                'fullOuterJoin',
+                'groupBy',
+                'orderBy',
                 'valores_add',
                 'list_inter',
                 'insertSelect',
@@ -426,6 +409,7 @@ class BuildQuery implements iBuildQuery
                 'valores_insert' => [[]],
                 'valores_insert_final' => [[]],
                 'comTransaction',
+                'fazer_rollback',
                 'posTransaction'=> ['a'],
                 'fimTransaction'=>['b'],
                 'limite',
@@ -443,11 +427,8 @@ class BuildQuery implements iBuildQuery
             $this->pdo_obj_usando = false;
         }
 
-        foreach ($this as $key => $value)
-        {
-
-            if(in_array($key, $array_valores) || array_key_exists($key, $array_valores))
-            {
+        foreach ($this as $key => $value) {
+            if(in_array($key, $array_valores) || array_key_exists($key, $array_valores)) {
                 $valor = false;
                 if(array_key_exists($key, $array_valores)) {
                     $valor = $array_valores[$key][0];
@@ -462,8 +443,7 @@ class BuildQuery implements iBuildQuery
     {
         $this->table = $table;
 
-        switch ($tipo)
-        {
+        switch ($tipo) {
             case "select":
                 $this->method = 'SELECT';
                 $this->util = 'FROM';
@@ -487,164 +467,117 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    protected function WhereAdjust($tipo,$campo,$operador,$valor,$status_where = false)
+    protected function ajustarWhere($tipo,$campo,$operador_comparacao,$valor,$status_where = false)
     {
-        if(!is_string($campo))
-        {
+        if(!is_string($campo)) {
             $msg_erro = "O campo precisa ser uma string";
-        }
-        elseif(!is_string($operador))
-        {
+        } elseif(!is_string($operador_comparacao)) {
             $msg_erro = "O operador precisa ser uma string";
-        }
-        else {
-            if ($tipo == "where")
-            {
-                $where = "WHERE " . $campo ." ".$operador." ".$valor;
+        } else {
+            if ($tipo == "where") {
+                $where = "WHERE " . $campo ." ".$operador_comparacao." ".$valor;
             }
-            elseif($tipo == "or" OR $tipo == "and")
-            {
-                if($status_where == false)
-                {
+            elseif($tipo == "or" OR $tipo == "and") {
+                if($status_where == false) {
                     $msg_erro = "É necessário informar o parâmetro where antes";
-                }
-                else
-                {
+                } else {
                     if ($tipo == "or") {
-                        $whereOr = "OR " . $campo . " " . $operador . " " . $valor;
+                        $whereOr = "OR " . $campo . " " . $operador_comparacao . " " . $valor;
                     } else {
-                        $whereAnd = "AND " . $campo . " " . $operador . " " . $valor;
+                        $whereAnd = "AND " . $campo . " " . $operador_comparacao . " " . $valor;
                     }
                 }
-            }
-            else
-            {
+            } else {
                 $msg_erro = "Parâmetro Where interno errado";
             }
         }
 
-        if(isset($msg_erro))
-        {
+        if(isset($msg_erro)) {
             return $this->msg_erro = $msg_erro;
-        }
-        elseif(isset($where))
-        {
+        } elseif(isset($where)) {
             return $this->where = $where;
-        }
-        elseif(isset($whereAnd))
-        {
+        } elseif(isset($whereAnd)) {
             return $this->whereAnd[] = $whereAnd;
-        }
-        elseif(isset($whereOr))
-        {
+        } elseif(isset($whereOr)) {
             return $this->whereOr[] = $whereOr;
         }
 
     }
-    // O comparativo dever ser feita em uma string da seguinte forma "a.tabela1 = b.tabela2"
-    protected function Adjust_join($tipo, $tabela,$tabela_join,$comparativo)
-    {
-        if(!is_string($tipo))
-        {
-            $msg_erro = "O tipo precisa ser uma string";
-        }
-        elseif(!is_string($tabela))
-        {
-            $msg_erro = "A tabela precisa ser uma string";
-        }
-        elseif(!is_string($tabela_join))
-        {
-            $msg_erro = "A tabela do join precisa ser uma string";
-        }
-        elseif(!is_string($comparativo))
-        {
-            $msg_erro = "O comparativo precisa ser uma string";
-        }
-        else
-        {
 
-            if($tipo == "leftjoin")
-            {
+    // O comparativo dever ser feita em uma string da seguinte forma "a.tabela1 = b.tabela2"
+    protected function ajustarJoin($tipo, $tabela,$tabela_join,$comparativo)
+    {
+        if(!is_string($tipo)) {
+            $msg_erro = "O tipo precisa ser uma string";
+        } elseif(!is_string($tabela)) {
+            $msg_erro = "A tabela precisa ser uma string";
+        } elseif(!is_string($tabela_join)) {
+            $msg_erro = "A tabela do join precisa ser uma string";
+        } elseif(!is_string($comparativo)) {
+            $msg_erro = "O comparativo precisa ser uma string";
+        } else {
+
+            if($tipo == "leftJoin") {
                 $leftjoin = " LEFT JOIN ".$tabela_join." ON ".$comparativo." ";
-            }
-            elseif($tipo == "rightjoin")
-            {
+            } elseif($tipo == "rightJoin") {
                 $rightjoin = " RIGHT JOIN ".$tabela_join." ON ".$comparativo." ";
             }
-            elseif($tipo == "innerjoin")
-            {
+            elseif($tipo == "innerJoin") {
                 $innerjoin = " INNER JOIN ".$tabela_join." ON ".$comparativo." ";
-            }
-            elseif($tipo == "fullouterjoin")
-            {
+            } elseif($tipo == "fullOuterJoin") {
                 $fullouterjoin = " FULL OUTER JOIN ".$tabela_join." ON ".$comparativo." ";
-            }
-            else
-            {
-                $msg_erro = "Método desconhecido, por favor, selecione: leftjoin, rightjoin, innerjoin ou fullouterjoin";
+            } else {
+                $msg_erro = "Método desconhecido, por favor, selecione: leftJoin, rightJoin, innerJoin ou fullOuterJoin";
             }
         }
 
-        if(isset($msg_erro))
-        {
+        if(isset($msg_erro)) {
             return $this->msg_erro = $msg_erro;
         }
-        elseif(isset($leftjoin))
-        {
-            return $this->leftjoin[] = $leftjoin;
+        elseif(isset($leftjoin)) {
+            return $this->leftJoin[] = $leftjoin;
         }
-        elseif(isset($rightjoin))
-        {
-            return $this->rightjoin[] = $rightjoin;
+        elseif(isset($rightjoin)) {
+            return $this->rightJoin[] = $rightjoin;
         }
-        elseif(isset($innerjoin))
-        {
-            return $this->innerjoin[] = $innerjoin;
+        elseif(isset($innerjoin)) {
+            return $this->innerJoin[] = $innerjoin;
         }
-        elseif(isset($fullouterjoin))
-        {
-            return $this->fullouterjoin[] = $fullouterjoin;
-        }
-        else
-        {
+        elseif(isset($fullouterjoin)) {
+            return $this->fullOuterJoin[] = $fullouterjoin;
+        } else {
             return $this->msg_erro = "Erro interno na funcção que gera os joins";
         }
 
     }
 
-    protected function AdjustgroupBy($tabela,$having=false)
+    protected function ajustarGroupBy($tabela,$having=false)
     {
-        if(!is_string($tabela))
-        {
-            $msg = "A tabela do groupby precisa ser uma string";
-        }
-        elseif($having != false &&  !is_string($having))
-        {
+        if(!is_string($tabela)) {
+            $msg = "A tabela do groupBy precisa ser uma string";
+        } elseif($having != false &&  !is_string($having)) {
             $msg = "O having precisa ser uma string";
-        }
-        else
-        {
+        } else {
             $use_having = ($having != false) ? " HAVING ".$having : "";
 
             $group = " GROUP BY ".$tabela.$use_having;
         }
 
-        if(isset($msg))
-        {
+        if(isset($msg)) {
             return $this->msg_erro = $msg;
-        }
-        else
-        {
-            return $this->groupby = $group;
+        } else {
+            return $this->groupBy = $group;
         }
 
 
     }
 
-    public function FazerRoolback() {
-        if($this->PDO()->inTransaction()) {
-            $this->PDO()->rollBack();
+    public function setRoolback()
+    {
+        if($this->pdo()->inTransaction()) {
+            $this->pdo()->rollBack();
         }
+        return $this;
     }
 
     public function tabela($tabela)
@@ -655,26 +588,21 @@ class BuildQuery implements iBuildQuery
 
     public function campos($campos,$update=false)
     {
-        if(!is_array($campos))
-        {
+        if(!is_array($campos)) {
             throw new Exception("É necessário que os campos sejam passados em um array",853);
-        }
-        else {
+        } else {
             if ($update != false) {
                 if (!is_array($update)) {
                     $this->msg_erro = "Os valores a serem inseridos precisam ser um array";
                 } else {
-                    if(count($update) == count($campos))
-                    {
+                    if(count($update) == count($campos)) {
                         $interrogas = str_pad('', (count($update) * 2), "?,", STR_PAD_LEFT);
                         $interrogas = substr($interrogas, 0 , strlen($interrogas) - 1 );
 
                         $this->valores_insert = $update;
                         $this->valores_add = $update;
                         $this->list_inter = $interrogas;
-                    }
-                    else
-                    {
+                    } else {
                         throw new Exception("A quantidade de campos e de valores não coincidem -> ".json_encode( $campos ),109);
                     }
                 }
@@ -685,8 +613,10 @@ class BuildQuery implements iBuildQuery
         return $this;
 
     }
+    
     // $insert = true, é para ser adicionado no banco, então retorna a ?
-    protected function VerificarParentese($valor,$insert=false)  {
+    protected function verificarParentese($valor,$insert=false)
+    {
         preg_match("/\((.*?)\)/", $valor, $in_parenthesis);
         $qntd_in_parenthesis = count($in_parenthesis);
         $params_subs = $qntd_in_parenthesis >= 1 ? explode(',',$in_parenthesis[1]) : [];
@@ -700,7 +630,8 @@ class BuildQuery implements iBuildQuery
         return $valor;
     }
 
-    protected function AddArrayValoresInsert($array, $delimitador=false) {
+    protected function addArrayValoresInsert($array, $delimitador=false)
+    {
         $array = $delimitador != false ? explode($delimitador, $array) : $array;
         for($i = 0; $i < count($array); $i++) {
             $this->valores_insert[] = $array[$i];
@@ -708,69 +639,60 @@ class BuildQuery implements iBuildQuery
         return $this->valores_insert;
     }
 
-    protected function PreAdjustWhere($tipo, $campo, $operador, $valor, $status_where = false) {
+    protected function preAdjustWhere($tipo, $campo, $operador_comparacao, $valor, $status_where = false)
+    {
         $valor_campo = "";
-        if(strcmp($operador, 'is') != 0) {
-            $valor_add = $this->VerificarParentese($valor);
+        if(strcmp($operador_comparacao, 'is') != 0) {
+            $valor_add = $this->verificarParentese($valor);
             if (is_array($valor_add)) {
-                $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+                $this->valores_insert = $this->addArrayValoresInsert($valor_add);
             } else {
                 $this->valores_insert[] = $valor_add;
             }
-            $valor_campo = $this->VerificarParentese($valor, true);
+            $valor_campo = $this->verificarParentese($valor, true);
         } else {
             $valor = is_null($valor) ? 'null' : $valor;
-            $operador .= ' '.$valor;
+            $operador_comparacao .= ' '.$valor;
         }
-        $this->WhereAdjust($tipo,$campo,$operador,$valor_campo, $status_where);
+        $this->ajustarWhere($tipo,$campo,$operador_comparacao,$valor_campo, $status_where);
     }
 
-    public function where($campo,$operador,$valor)
+    public function where($campo,$operador_comparacao,$valor)
     {
-
-        $this->PreAdjustWhere("where",$campo,$operador,$valor);
+        $this->preAdjustWhere("where",$campo,$operador_comparacao,$valor);
         return $this;
     }
 
-    public function whereOr($campo,$operador,$valor)
+    public function whereOr($campo,$operador_comparacao,$valor)
     {
-        $this->PreAdjustWhere("or",$campo,$operador,$valor,$this->where);
+        $this->preAdjustWhere("or",$campo,$operador_comparacao,$valor,$this->where);
         return $this;
     }
 
-    public function whereAnd($campo,$operador,$valor)
+    public function whereAnd($campo,$operador_comparacao,$valor)
     {
-        $this->PreAdjustWhere("and",$campo,$operador,$valor,$this->where);
+        $this->preAdjustWhere("and",$campo,$operador_comparacao,$valor,$this->where);
         return $this;
     }
 
 
     public function whereComplex($campos, $operadores, $valores, $oper_logicos=false)
     {
-        if(!is_array($campos))
-        {
+        if(!is_array($campos)) {
             $this->msg_erro = "No where complexo os campos precisam ser um array";
         }
-        elseif(!is_array($operadores))
-        {
+        elseif(!is_array($operadores)) {
             $this->msg_erro = "No where complexo os operadores precisam ser um array";
         }
-        elseif(!is_array($valores))
-        {
+        elseif(!is_array($valores)) {
             $this->msg_erro = "No where complexo os valores precisam ser um array";
         }
-        elseif(!is_array(@$oper_logicos))
-        {
+        elseif(!is_array(@$oper_logicos)) {
             $this->msg_erro = "No where complexo os operadores lógicos precisam ser um array";
-        }
-        else
-        {
-            if($this->where == false)
-            {
+        } else {
+            if($this->where == false) {
                 $this->msg_erro = "Para utilizar o where complexo, é necessário instanciar o where primeiro";
-            }
-            else
-            {
+            } else {
                 $cont_campos = count($campos);
                 $cont_operadores = count($operadores);
                 $cont_valores = count($valores);
@@ -778,26 +700,22 @@ class BuildQuery implements iBuildQuery
 
                 $tudo = array($cont_campos,$cont_operadores,$cont_valores,$cont_logicos);
 
-                foreach ($tudo as $key => $comp)
-                {
-                    if($tudo[0] != $comp)
-                    {
+                foreach ($tudo as $key => $comp) {
+                    if($tudo[0] != $comp) {
                         $this->msg_erro = "As quantidade de valores não são equivalentes, por favor corrija";
                     }
                 }
 
-                if($this->msg_erro == false)
-                {
+                if($this->msg_erro == false) {
                     $s = '';
 
-                    for($i = 0; $i < count($campos); $i++)
-                    {
+                    for($i = 0; $i < count($campos); $i++) {
                         $interrogacoes = "";
                         if(strcmp($operadores[$i], 'is') != 0) {
-                            $valor_add = $this->VerificarParentese($valores[$i]);
-                            $interrogacoes = $this->VerificarParentese($valores[$i], true);
+                            $valor_add = $this->verificarParentese($valores[$i]);
+                            $interrogacoes = $this->verificarParentese($valores[$i], true);
                             if (is_array($valor_add)) {
-                                $this->valores_insert = $this->AddArrayValoresInsert($valor_add);
+                                $this->valores_insert = $this->addArrayValoresInsert($valor_add);
                             } else {
                                 $this->valores_insert[] = $valor_add;
                             }
@@ -806,19 +724,14 @@ class BuildQuery implements iBuildQuery
                             $operadores[$i] .= ' '.$valor_opera;
                         }
 
-                        if($i == 0)
-                        {
+                        if($i == 0) {
                             //$this->valores_insert[] = $valores[0];
                             $s .= $oper_logicos[0]." (".$campos[0]." ".$operadores[0]." ".$interrogacoes." ";
-                        }
-                        elseif($i == count($campos) - 1)
-                        {
+                        } elseif($i == count($campos) - 1) {
                             //$this->valores_insert[] = $valores[$i];
                             $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
                             $this->whereComplex[] = $s;
-                        }
-                        else
-                        {
+                        } else {
                             //$this->valores_insert[] = $valores[$i];
                             $s .= $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." ";
                         }
@@ -830,61 +743,54 @@ class BuildQuery implements iBuildQuery
 
     }
 
-    public function leftjoin($tabela_join,$comparativo)
+    public function leftJoin($tabela_join,$comparativo)
     {
-        $this->Adjust_join("leftjoin", $this->table_in,$tabela_join,$comparativo);
+        $this->ajustarJoin("leftJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
-    public function rightjoin($tabela_join,$comparativo)
+    public function rightJoin($tabela_join,$comparativo)
     {
-        $this->Adjust_join("rightjoin", $this->table_in,$tabela_join,$comparativo);
+        $this->ajustarJoin("rightJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
-    public function innerjoin($tabela_join,$comparativo)
+    public function innerJoin($tabela_join,$comparativo)
     {
-        $this->Adjust_join("innerjoin", $this->table_in,$tabela_join,$comparativo);
+        $this->ajustarJoin("innerJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
-    public function fullouterjoin($tabela_join,$comparativo)
+    public function fullOuterJoin($tabela_join,$comparativo)
     {
-        $this->Adjust_join("fullouterjoin", $this->table_in,$tabela_join,$comparativo);
+        $this->ajustarJoin("fullOuterJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
-    public function groupby($tabela)
+    public function groupBy($tabela)
     {
-        $this->AdjustgroupBy($tabela);
+        $this->ajustarGroupBy($tabela);
         return $this;
     }
 
-    public function groupbyHaving($tabela,$clausula)
+    public function groupByHaving($tabela,$clausula)
     {
-        $this->AdjustgroupBy($tabela,$clausula);
+        $this->ajustarGroupBy($tabela,$clausula);
         return $this;
     }
 
-    public function orderby($campo, $tipo)
+    public function orderBy($campo, $tipo)
     {
-        if(!is_string($campo))
-        {
+        if(!is_string($campo)) {
             $this->msg_erro = "O campo precisa ser uma string";
         }
-        elseif(!is_string($tipo) AND (strtoupper($tipo) == "ASC" OR strtoupper($tipo) == "DESC"))
-        {
+        elseif(!is_string($tipo) AND (strtoupper($tipo) == "ASC" OR strtoupper($tipo) == "DESC")) {
             $this->msg_erro = "O tipo precisa ser uma string, sendo ou ASC ou DESC ";
-        }
-        else
-        {
-            if($this->orderby == false)
-            {
-                $this->orderby = "ORDER BY " . $campo . " " . $tipo;
-            }
-            else
-            {
-                $this->orderby = $this->orderby.', '.$campo.' '.$tipo;
+        } else {
+            if($this->orderBy == false) {
+                $this->orderBy = "ORDER BY " . $campo . " " . $tipo;
+            } else {
+                $this->orderBy = $this->orderBy.', '.$campo.' '.$tipo;
             }
         }
 
@@ -893,16 +799,11 @@ class BuildQuery implements iBuildQuery
 
     public function insertSelect($tabela,$campos)
     {
-        if(!is_array($campos))
-        {
+        if(!is_array($campos)) {
             throw new Exception("Os campos do insertSelect precisam ser passados em um array");
-        }
-        elseif(!is_string($tabela))
-        {
+        } elseif(!is_string($tabela)) {
             throw new Exception("A tabela do insertSelect precisa ser uma String");
-        }
-        else
-        {
+        } else {
             $campos_usar = implode(",",$campos);
             $this->insertSelect = "SELECT ".$campos_usar." FROM ".$tabela;
         }
@@ -911,11 +812,9 @@ class BuildQuery implements iBuildQuery
 
     public function union($tipo=false)
     {
+        $this->limparValores(true);
 
-        $this->LimparValores(true);
-
-        switch( strtolower($tipo) )
-        {
+        switch( strtolower($tipo) ) {
             case 'all':
                 $this->unionAll = ' UNION ALL ';
                 break;
@@ -932,25 +831,24 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function ComTransaction($pos=2, $fim=1)
+    public function setTransactionUnitaria($pos=2, $fim=1,$rollback=false)
     {
         $this->comTransaction = true;
+        $this->fazer_rollback = $rollback;
         $this->posTransaction = $pos;
         $this->fimTransaction = $fim;
         return $this;
     }
 
-    public function MsgNaoEncontrado($msg)
+    public function setMsgNaoEncontrado($msg)
     {
         $this->nao_encontrado_per = $msg;
-
         return $this;
     }
 
     public function limit($limite, $offset=false)
     {
-        if($limite != false)
-        {
+        if($limite != false) {
             $this->limite = $limite;
             $this->offset = $offset;
 
@@ -958,27 +856,27 @@ class BuildQuery implements iBuildQuery
             //$this->valores_insert[] = (int) $limite;
         }
 
-        if($offset != false)
-        {
+        if($offset != false) {
             $this->valores_insert_final[] = (int) $offset;
         }
 
         return $this;
     }
 
-    public function GerarLog($gerar=true)
+    public function setGerarLog($gerar=true)
     {
         $this->gerar_log = $gerar;
         return $this;
     }
 
-    public function UsarExceptionNaoEncontrado($usar=true)
+    public function setUsarExceptionNaoEncontrado($usar=true)
     {
         $this->exception_not_found = $usar;
         return $this;
     }
 
-    public function TransacaoMultipla() {
+    public function setTransacaoMultipla()
+    {
         $this->transacao_multipla = true;
         $this->comTransaction = true;
         $this->posTransaction = $this->pos_multipla;
@@ -986,19 +884,33 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function CompletarTransacaoMultipla() {
+    public function setCompletarTransacaoMultipla($rollback=false)
+    {
         $this->comTransaction = true;
+        $this->fazer_rollback = $rollback;
         $this->fimTransaction = $this->posTransaction;
         $this->finalizar_multipla = true;
         return $this;
     }
 
-    public function ContarLinhasAfetadas(){
+    protected function setLinhasAfetadas($linhas_afetadas)
+    {
+        $this->linhas_afetadas = $linhas_afetadas;
+    }
+
+    public function getLinhasAfetadas()
+    {
+        return $this->linhas_afetadas;
+    }
+
+    public function getRetornarLinhasAfetadas()
+    {
         $this->contarLinhasAfetadas = true;
         return $this;
     }
 
-    public function RetornoPersonalizado($retorno){
+    public function setRetornoPersonalizado($retorno)
+    {
         if(!is_array($retorno)) {
             throw new Exception('Tipo de retorno personalizado não é um array',8);
         }
@@ -1006,7 +918,8 @@ class BuildQuery implements iBuildQuery
        return $this;
     }
 
-    public function EventosGravar($eventos) {
+    public function setEventosGravar($eventos)
+    {
         if(is_array($eventos)) {
             $this->eventos_gravar = @array_map('strtoupper', $eventos);
         } else {
@@ -1015,36 +928,47 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function LogandoComplexo() {
-        $this->gravando_log = true;
+    public function setLogandoComplexo()
+    {
+        $this->gravar_log_complexo = true;
         return $this;
     }
 
-    protected function LogComplexo($type,$act) {
-        if($type != false AND $this->eventos_gravar != false) {
+    protected function setLogComplexo($type,$act)
+    {
+        if($type != false AND $this->eventos_gravar != false){
             if(in_array($act->method, $this->eventos_gravar)) {
-                $type($act->LogandoComplexo(), $act->method);
+                $type($act->setLogandoComplexo(), $act->method);
             }
         }
     }
+
+    protected function setDadosSelectTransacao($dados)
+    {
+        $this->dados_select_transacao = $dados;
+        return $this;
+    }
+
+    public function getDadosSelectTransacao()
+    {
+        return $this->dados_select_transacao;
+    }
+
     public function buildQuery($tipo,$usando_union_transacao=false)
     {
         $this->create($tipo,$this->table_in);
 
-        if(isset($this->campos_table) AND !is_array($this->campos_table) AND $this->method != "DELETE")
-        {
+        if(isset($this->campos_table) AND !is_array($this->campos_table) AND $this->method != "DELETE") {
             $this->msg_erro = "Os campos não são um array";
             $code_error = 005;
 
         }
-        elseif(!is_string($this->table))
-        {
+        elseif(!is_string($this->table)) {
             $this->msg_erro = "A tabela precisa ser uma string";
             $code_error = 006;
         }
 
-        if(isset($this->msg_erro))
-        {
+        if(isset($this->msg_erro)) {
             if($this->msg_erro != false) {
                 $msg = (isset($msg)) ? $msg : $this->msg_erro;
                 $code_erro_return = isset($code_error) ? $code_error : 405;
@@ -1059,28 +983,27 @@ class BuildQuery implements iBuildQuery
         $whereComplex = ($this->whereComplex != false) ? " ".implode(" ",$this->whereComplex) : "";
         $whereAnd = $this->whereAnd != false ? " ".implode(" ",$this->whereAnd) : '';
         $whereOr = $this->whereOr != false ? " ".implode(" ",$this->whereOr) : '';
-        $orderby = ($this->orderby != false) ? " ".$this->orderby : "";
+        $orderby = ($this->orderBy != false) ? " ".$this->orderBy : "";
         $union = ($this->union != false && $this->unionAll == false) ? $this->union : '';
         $unionAll = ($this->union == false && $this->unionAll != false) ? $this->unionAll : '';
         $msg_nao_encontrado = ($this->nao_encontrado_per != false) ? $this->nao_encontrado_per : 'Nada Encontrado';
 
         // Joins
-        $leftjoin = ($this->leftjoin != false) ? implode(' ',$this->leftjoin) : "";
-        $rightjoin = ($this->rightjoin != false) ? implode(' ',$this->rightjoin) : "";
-        $innerjoin = ($this->innerjoin != false) ? implode(' ',$this->innerjoin) : "";
-        $fullouterjoin = ($this->fullouterjoin != false) ? implode(' ',$this->fullouterjoin) : "";
+        $leftjoin = ($this->leftJoin != false) ? implode(' ',$this->leftJoin) : "";
+        $rightjoin = ($this->rightJoin != false) ? implode(' ',$this->rightJoin) : "";
+        $innerjoin = ($this->innerJoin != false) ? implode(' ',$this->innerJoin) : "";
+        $fullouterjoin = ($this->fullOuterJoin != false) ? implode(' ',$this->fullOuterJoin) : "";
         // Fim Joins
 
-        $groupby = ($this->groupby != false) ? $this->groupby." " : "";
+        $groupby = ($this->groupBy != false) ? $this->groupBy." " : "";
         $limite = ((string) $this->limite != false) ? ' LIMIT ?' : "";
         $limite = ( (string) $this->offset != false) ? $limite.' OFFSET ?' : $limite;
 
         $retorno_personalizado = $this->retorno_personalizado;
 
         if($this->method == "SELECT") {
-
-            switch (self::$driver)
-            {
+            $is_select = true;
+            switch (self::$driver) {
                 case "firebird":
                     $limitar = ((string) $this->limite != false) ? ' FIRST ? ' : "";
                     $limitar = ( (string) $this->offset != false) ? $limitar.' SKIP ? ' : $limitar;
@@ -1109,18 +1032,12 @@ class BuildQuery implements iBuildQuery
                 . $orderby
                 . $limite;
 
-        }
-        elseif ($this->method == "INSERT")
-        {
-            if($this->list_inter == false AND $this->insertSelect == false)
-            {
+        } elseif ($this->method == "INSERT") {
+            if($this->list_inter == false AND $this->insertSelect == false) {
                 throw new Exception("É ncessário passar os valores dos campos",007);
 
-            }
-            else
-            {
-                switch ($this->insertSelect)
-                {
+            } else {
+                switch ($this->insertSelect) {
                     case false:
                         $suf_insert = "VALUES ("
                             . $this->list_inter . ")";
@@ -1149,13 +1066,13 @@ class BuildQuery implements iBuildQuery
         }
         elseif($this->method == "UPDATE")
         {
-            if($campos_usar != '*')
-            {
-                for ($i = 0; $i < count($this->campos_table); $i++)
-                {
-                    $campos_use = $this->campos_table;
-                    $campos_atualizar[] = $campos_use[$i] . ' = ? ';
+            if($campos_usar != '*') {
+                //for ($i = 0; $i < count($this->campos_table); $i++) {
+                foreach ($this->campos_table as $i => $campos_use) {
+                    //$campos_use = $this->campos_table;
+                    $campos_atualizar[] = $campos_use/*[$i]*/ . ' = ? ';
                 }
+                //}
 
                 $campos_usar = implode(',',$campos_atualizar);
 
@@ -1167,14 +1084,10 @@ class BuildQuery implements iBuildQuery
                     . $whereOr
                     . $whereAnd
                     . $whereComplex;
-            }
-            else
-            {
+            } else {
                 throw new Exception('Layout incorreto para o método UPDATE ',107);
             }
-        }
-        elseif($this->method == "DELETE")
-        {
+        } elseif($this->method == "DELETE") {
             $string_build = $this->method . " "
                 . $this->util . " "
                 . $this->table . ""
@@ -1183,9 +1096,7 @@ class BuildQuery implements iBuildQuery
                 . $whereAnd
                 . $whereComplex
                 . $groupby;
-        }
-        else
-        {
+        } else {
             throw new Exception("Metódo desconhecido", 108);
 
         }
@@ -1196,27 +1107,15 @@ class BuildQuery implements iBuildQuery
         $this->valores_insert_bd[] = $this->valores_insert;
         $pdo_obj = $this->pdo_obj_usando != false ? $this->pdo_obj_usando : false;
 
-        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true)
-        {
-            try
-            {
+        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true) {
+            try {
                 $count_insert_bd = count($this->valores_insert_bd);
-                if($count_insert_bd > 0)
-                {
-                    $count_insert = 1;
+                if($count_insert_bd > 0) {
                     $dados_insert_query = [];
-                    for ($i = 0; $i < $count_insert_bd; $i++)
-                    {
-                        $matriz_insert = $this->valores_insert_bd[$i];
 
-                        for ($j = 0; $j < count($matriz_insert); $j++)
-                        {
-                            $elemento_insert = $matriz_insert[$j];
-                            //if(strlen($elemento_insert) > 0)
-                            //{
+                    foreach ($this->valores_insert_bd as $i => $matriz_insert) {
+                        foreach ($matriz_insert as $j => $elemento_insert) {
                             $dados_insert_query[] = $elemento_insert;
-                            //}
-
                         }
                     }
 
@@ -1224,52 +1123,50 @@ class BuildQuery implements iBuildQuery
                     if(count($this->valores_insert_final) > 0) {
                         $dados_insert_query = array_merge($dados_insert_query, $this->valores_insert_final);
                     }
-                    $retorno = $this->ExecSql($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $pdo_obj);
-                }
-                else
-                {
-                    $retorno = $this->ExecSql($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $pdo_obj);
+                    $retorno = $this->executarSQL($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $this->fazer_rollback, $pdo_obj);
+                } else {
+                    $retorno = $this->executarSQL($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $this->fazer_rollback, $pdo_obj);
                 }
 
-                if($this->transacao_multipla && $this->finalizar_multipla != true) {
+                $retornar_na_transacao = $retorno;
+
+                if($this->transacao_multipla and $this->finalizar_multipla != true) {
                     $retorno = $this;
+                    $retorno_this = true;
                 }
 
-            } catch(Exception $e)
-            {
+            } catch(Exception $e) {
                 $valores_query = json_encode($dados_insert_query);
                 $msg_error = ($e->getCode() == 710) ? $msg_nao_encontrado.';'.$this->gerar_log.';'.$this->query_union . ' Valores: '.$valores_query : "Erro no banco de dados: ".$e->getMessage().'. Query: '.$this->query_union." -> valores_query => ".json_encode($dados_insert_query);
                 throw new  Exception($msg_error, (int) $e->getCode());
             }
 
-        }
-        else
-        {
+        } else {
             $retorno = $this;
+            $retorno_this = true;
         }
-        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true)
-        {
-            if($this->gerar_log)
-            {
+        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true) {
+            if($this->gerar_log) {
                 //$valores_query = json_encode($dados_insert_query);
-                //$this->Log(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
+                //$this->setLog(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
                 //$retorno = [$retorno, "query_sql" => $this->query_union." -> valores_query => ".$valores_query];
             }
 
-            $this->LimparValores();
+            $this->limparValores();
             $this->query_union = '';
         }
 
-        if($retorno_personalizado != false) {
-            return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
-        }
-        //if($retorno != $this) {
+        if($retorno_personalizado != false) return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
 
-            if($this->gravando_log == false) {
-                $this->LogComplexo($this->GravarLogComplexo, $this);
-                $this->gravando_log = true;
-            }
-        //}
+        if($this->gravar_log_complexo == false) {
+            $this->setLogComplexo($this->gravarsetLogComplexo, $this);
+            $this->gravar_log_complexo = true;
+        }
+
+        if(isset($is_select) and isset($retornar_na_transacao) and ($this->transacao_multipla)) {
+            $this->setDadosSelectTransacao($retornar_na_transacao);
+        }
+
         return $retorno;
     }
 
