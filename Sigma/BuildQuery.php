@@ -223,7 +223,8 @@ class BuildQuery implements iBuildQuery
         $query_analize = explode(" ", $query);
 
         if(is_array($query_analize) AND is_string($query)) {
-            $is_select = (strcmp(strtolower($query_analize[0]), "select") == 0) ? true : false;
+            preg_match('/select|show/i', $query_analize[0], $analisarSelect);
+            $is_select = (count($analisarSelect) > 0) ? true : false;
             $iniciar_transaction = $pos_transaction == $fim_transaction;
             if($pdo_obj_t != false) {
                 $this->setPDO($pdo_obj_t);
