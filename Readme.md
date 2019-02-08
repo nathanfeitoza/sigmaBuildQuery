@@ -99,10 +99,10 @@ The methods of querybuilder are shown below:
                 ->setGerarLog(true);
                 
                 if(($i+1) < $percorrer) {
-                    $data->TransacaoMultipla()
+                    $data->setTransacaoMultipla()
                         ->buildQuery('insert', true);
                 } else {
-                    $data->CompletarTransacaoMultipla()
+                    $data->setCompletarTransacaoMultipla()
                         ->buildQuery('insert');
                 }
         }
