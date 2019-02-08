@@ -62,7 +62,7 @@ The methods of querybuilder are shown below:
                 ->tabela('teste')
                 ->campos(['log','testei'], ['teste-'.$i,$dados_add])
                 ->setGerarLog(true)
-                ->comTransaction($i, ($total - 1))
+                ->setTransactionUnitaria($i, ($total - 1))
                 ->buildQuery('insert');
         }
    ```
