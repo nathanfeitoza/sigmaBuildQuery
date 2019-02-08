@@ -55,7 +55,7 @@ The methods of querybuilder are shown below:
    Example using simple transaction
    ```php
         $total = 3;
-        $trans = $this->getConBD()->InicarTransacao(); // Is necessary for maintaining the PDO Object
+        $trans = $this->getConBD()->setInicarTransacao(); // Is necessary for maintaining the PDO Object
         for($i = 0; $i < $total; $i++) {
             $dados_add = $i;
             $data = $trans
