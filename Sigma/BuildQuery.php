@@ -903,7 +903,7 @@ class BuildQuery implements iBuildQuery
         return $this->linhas_afetadas;
     }
 
-    public function setRetornarLinhasAfetadas()
+    public function getRetornarLinhasAfetadas()
     {
         $this->contarLinhasAfetadas = true;
         return $this;
