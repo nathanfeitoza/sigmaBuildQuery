@@ -853,12 +853,19 @@ class BuildQuery implements iBuildQuery
             $this->limite = $limite;
             $this->offset = $offset;
 
-            $this->valores_insert_final[] = (int) $limite;
-            //$this->valores_insert[] = (int) $limite;
+            if(self::$driver != 'firebird') {
+                $this->valores_insert_final[] = (int) $limite;
+            } else {
+                array_splice( $this->valores_insert, 0, 0, [(int) $limite] );
+            }
         }
 
         if($offset != false) {
-            $this->valores_insert_final[] = (int) $offset;
+            if(self::$driver != 'firebird') {
+                $this->valores_insert_final[] = (int) $offset;
+            } else {
+                array_splice( $this->valores_insert, 1, 0, [(int) $offset] );
+            }
         }
 
         return $this;
