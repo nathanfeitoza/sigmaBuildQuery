@@ -17,7 +17,7 @@ The methods of querybuilder are shown below:
         Note: The use of the entire query builder is done via polymorphism, which are being shown below. The choice by this method has been established because it looks more like sql queries and block building of codes. Therefore, it facilitates the life of the developer, being that the order of the elements will not change the final result, unless a main element such as -> table (string) is missing, but this check is already done and triggered in the log (to be implemented)
 
    ```php
-            $var->setRoolback() // Rollback if there is any open transaction. Can be used when mixing code with transaction with no transaction. Obs: Does not polymorphism because it is a method of containment / prevention of errors
+            $var->roolback() // Rollback if there is any open transaction. Can be used when mixing code with transaction with no transaction. Obs: Does not polymorphism because it is a method of containment / prevention of errors
             
             $var->tabela('teste') // Sets the usage table
             ->campos(array("terste1","teste2","teste3")) // Fields used to make select, one can only pass an empty array: [''], and it will search all the fields of the table, or ['*'], or the field names
@@ -55,23 +55,26 @@ The methods of querybuilder are shown below:
    Example using simple transaction
    ```php
         $total = 3;
-        $trans = $this->getConBD()->setInicarTransacao(); // Is necessary for maintaining the PDO Object
+        $var->inicarTransacao(); // Is necessary for maintaining the PDO Object ans init the transaction
         for($i = 0; $i < $total; $i++) {
             $dados_add = $i;
-            $data = $trans
+            $data = $var
                 ->tabela('teste')
                 ->campos(['log','testei'], ['teste-'.$i,$dados_add])
                 ->setGerarLog(true)
-                ->setTransactionUnitaria($i, ($total - 1))
                 ->buildQuery('insert');
         }
+        $var->commit(); // To commit the transaction
+        /*
+        Or use: $var->rollback() // To rollback the transaction
+        */
    ```
 
    Example using multiples tables with transactions
    ```php
+        $var->inicarTransacao();
         for($i = 0; $i < 100; $i++) {
-            $data = $this->getConBD()
-                ->tabela('teste')
+            $data = $var->tabela('teste')
                 ->campos(['log','testei'], ['teste-'.$i, 1])
                 ->setGerarLog(true)
                 ->TransacaoMultipla()
@@ -79,18 +82,21 @@ The methods of querybuilder are shown below:
                 ->tabela('teste2')
                 ->campos(['nome','teste'], ['teste_tabela2-'.$i, 1])
                 ->setGerarLog(true)
-                ->CompletarTransacaoMultipla()
                 ->buildQuery('insert');
         }
+        
+        $var->commit(); // To commit the transaction
+        /*
+        Or use: $var->rollback() // To rollback the transaction
+        */
    ```
    Varying number of values entered in table 2
    ```php
         $percorrer = 100;
-        $data = $this->getConBD()
-            ->tabela('teste')
+        $var->inicarTransacao();
+        $data = $var->tabela('teste')
             ->campos(['log','testei'], ['teste-0', 1])
             ->setsetGerarLog(true)
-            ->setTransacaoMultipla()
             ->buildQuery('insert', true);
         for($i = 0; $i < $percorrer; $i++) {
                 $add = 1;
@@ -98,19 +104,20 @@ The methods of querybuilder are shown below:
                 ->campos(['nome','teste'], ['teste_tabela2-'.$i, $add])
                 ->setGerarLog(true);
                 
-                if(($i+1) < $percorrer) {
-                    $data->setTransacaoMultipla()
-                        ->buildQuery('insert', true);
-                } else {
-                    $data->setCompletarTransacaoMultipla()
-                        ->buildQuery('insert');
-                }
+
+                $data->buildQuery('insert', ($i+1) < $percorrer);
+                
         }
+
+        $var->commit(); // To commit the transaction
+        /*
+        Or use: $var->rollback() // To rollback the transaction
+        */
    ```
 
    Use log complex or events in database
    ```php
         $var->setEventosGravar(['INSERT','DELETE','UPDATE'])->setLogComplexo = function($con, $acao) {
-           $this->GravarLogSC($acao,$con);
+           
         };
    ```

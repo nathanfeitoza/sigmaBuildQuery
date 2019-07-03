@@ -9,8 +9,9 @@ require '../vendor/autoload.php';
 
 echo'<pre>';
 try {
+
     //SQlite
-    $sql = \Sigma\BuildQuery::init('sqlite',__DIR__.'/sqlite/teste.db',null,null,null, ['dir_log' => __DIR__.'/logs']);
+    $sql = \Sigma\BuildQuery::init('sqlite',__DIR__.'/sqlite/teste.db',null,null, null,['dir_log' => __DIR__.'/logs/']);
     
 
     /*

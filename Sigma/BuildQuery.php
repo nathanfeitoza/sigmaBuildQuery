@@ -1062,10 +1062,10 @@ class BuildQuery implements iBuildQuery
         $this->valores_insert_bd[] = $this->valores_insert;
         $pdo_obj = $this->pdo_obj_usando != false ? $this->pdo_obj_usando : false;
 
-        /*if($this->gravar_log_complexo == false) {
+        if($this->gravar_log_complexo == false) {
             $this->setLogComplexo($this->gravarsetLogComplexo, $this);
             $this->gravar_log_complexo = true;
-        }*/
+        }
 
         $query = $this->query_union;
         $parametros = false;
