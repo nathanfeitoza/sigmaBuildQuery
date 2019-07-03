@@ -78,7 +78,6 @@ The methods of querybuilder are shown below:
             $data = $var->tabela('teste')
                 ->campos(['log','testei'], ['teste-'.$i, 1])
                 ->setGerarLog(true)
-                ->TransacaoMultipla()
                 ->buildQuery('insert', true)
                 ->tabela('teste2')
                 ->campos(['nome','teste'], ['teste_tabela2-'.$i, 1])
