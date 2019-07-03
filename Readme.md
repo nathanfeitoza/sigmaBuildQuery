@@ -44,7 +44,8 @@ The methods of querybuilder are shown below:
             ->campos(array("testar"), array("testarV"))
             ->buildQuery("select", true)
             ->union()
-            ->setTransactionUnitaria((contador atual) // This method activates the transaction and for this it is necessary to define the initial position of the counter and the final position. If it is not in a loop, you can put the values 1 and 1. But if it is in an array loop, for example, place ($ i, (count ($ array) - 1))
+            ->commit() // Commit a transaction
+            ->rollback() // Rollback a transacation
             ->tabela("teste4")
             ->campos(array("testar","testarheuhe"), array("testarV","testeF"))
             ->setRetornarLinhasAfetadas() // Count affected lines (for update, delete and insert)
