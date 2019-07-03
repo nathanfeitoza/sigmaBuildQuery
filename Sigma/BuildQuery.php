@@ -50,19 +50,22 @@ class BuildQuery implements iBuildQuery
     private $fazer_rollback = false;
     private $posTransaction = 'a';
     private $fimTransaction = 'b';
+    private $iniciar_transacao = false;
     private $nao_encontrado_per = false;
     private $limite = false;
     private $offset = false;
     private $gerar_log = false;
     private $exception_not_found = true;
+    private $retornar_false_not_found = false;
     private $msg_erro = false;
     private $query_union = '';
     private $retorno_personalizado = false;
     private $linhas_afetadas = 0;
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
-    protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false;
+    protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false, $eventos_retornar = false;
     protected $pdo_padrao = false, $gravar_log_complexo = false, $dados_select_transacao;
     private static $logger = false, $file_handler = false;
+    private $count_afetadas_insert = 0;
     public $gravarsetLogComplexo;
 
     private function __construct(){}
@@ -145,11 +148,11 @@ class BuildQuery implements iBuildQuery
                 //return self::$con;
             } catch (PDOException $e) {
                 $msg = "ERRO DE CONEXÃO " . $e->getMessage();
-                throw new Exception($msg, $e->getCode());
+                throw new AppException($msg, $e->getCode());
             }
         } else {
             $msg = "DRIVER INVÁLIDO";
-            throw new Exception($msg, 001);
+            throw new AppException($msg, 001);
         }
     }
 
@@ -202,153 +205,153 @@ class BuildQuery implements iBuildQuery
         return $this->pdo_padrao;
     }
 
-    public function setInicarTransacao()
+    public function iniciarTransacao()
     {
-        $this->pdo_obj_usando = $this->pdo();
+        $this->iniciar_transacao = true;
         return $this;
     }
 
-    /**
-     * @param $query
-     * @param bool $parametros
-     * @param bool $usar_transacao
-     * @param bool $usar_exception_nao_encontrado
-     * @param int $pos_transaction -> Este parâmetro, e o que vem abaixo dele, fazem a verificação se o laço é o último e faz o commit ou o rollback
-     * @param int $fim_transaction
-     * @return bool|mixed
-     * @throws Exception
-     */
-    public function executarSQL($query, $parametros=false, $usar_transacao=false, $usar_exception_nao_encontrado=true, $pos_transaction='a', $fim_transaction='b', $rollback=false, $pdo_obj_t=false)
-    { // Metódo genérico para execuções de sql no banco de dados
+    public function rollback()
+    {
+        if($this->pdo()->inTransaction()) $this->pdo()->rollback();
+    }
+
+    public function commit()
+    {
+        if($this->pdo()->inTransaction()) $this->pdo()->commit();
+    }
+
+    public function executarSQL($query, $parametros=false)
+    {
+        $exception_nao_encontrado = $this->exception_not_found;
+        $retornar_false_nao_encontrado = $this->retornar_false_not_found;
+        $msg_nao_encontrado = $this->nao_encontrado_per;
+
+        if(!is_string($query)) throw new AppException('A querya informada não é uma string', 4578);
+
         $query_analize = explode(" ", $query);
+        $tipo = strtolower($query_analize[0]);
 
-        if(is_array($query_analize) AND is_string($query)) {
-            preg_match('/select|show/i', $query_analize[0], $analisarSelect);
-            $is_select = (count($analisarSelect) > 0) ? true : false;
-            $iniciar_transaction = $pos_transaction == $fim_transaction;
-            if($pdo_obj_t != false) {
-                $this->setPDO($pdo_obj_t);
-            }
-            $pdo_obj = $this->pdo(); //$pdo_obj_t != false ? $pdo_obj_t :
-            $pos_transaction = is_string($pos_transaction) ? 1 : $pos_transaction;
-            if($usar_transacao && $pos_transaction == 0 && !$pdo_obj->inTransaction()) {
-                if(strtolower(self::$driver) == "firebird") {
-                    $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
-                }
-                $pdo_obj->beginTransaction();
-            }
+        $pdo_obj = $this->pdo();
 
-            try {
-                $not_enabled = ['firebird','sqlite'];
-                if(!in_array(self::$driver, $not_enabled)) {
-                    $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
-                }
-                $data = $pdo_obj->prepare($query);
 
-                if($parametros != false) {
-                    if(is_array($parametros) AND count($parametros) != 0) {
-                        for($i = 0; $i < count($parametros); $i++) {
-                            $dados_query = $parametros[$i];
-                            if(is_integer($dados_query))
-                                $is_int = PDO::PARAM_INT;
-                            elseif(is_bool($dados_query))
-                                $is_int = PDO::PARAM_BOOL;
-                            elseif(is_null($dados_query))
-                                $is_int = PDO::PARAM_NULL;
-                            else
-                                $is_int = PDO::PARAM_STR;
-                            $data->bindValue(($i + 1), $parametros[$i], $is_int);
-                        }
-                    } else {
-                        $msg = 'É necessário passar um array não nulo';
-                        $this->setLog($msg, 'error');
-                        throw new Exception($msg, 002);
-                    }
-                }
-                if(isset($data1)) {
-                    $data1->execute();
-                }
-                $exec = $data->execute();
+        if ($this->iniciar_transacao and !$pdo_obj->inTransaction()) {
+            if (strtolower(self::$driver) == "firebird") $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
 
-                if($is_select) {
-                    $tipo_retorno = PDO::FETCH_OBJ; // Retorna tipo objetos
-                    if(isset(self::$opcoes['return_type'])) {
-                        if((int) self::$opcoes['return_type'] == 2) {
-                            $tipo_retorno = PDO::FETCH_NAMED; // Retorna Tipo array
-                        }
-                    }
-                    $data_return = $data->fetchAll($tipo_retorno);
-
-                    if(count($data_return) > 0) {
-                        if($usar_transacao AND $iniciar_transaction and $this->pdo()->inTransaction()) {
-                            if($rollback)
-                                $pdo_obj->rollBack();
-                            else
-                                $pdo_obj->commit();
-                        }
-                        $retorno_suc =  $data_return;
-                    } else {
-                        if($usar_transacao AND $iniciar_transaction and $this->pdo()->inTransaction()) {
-                            // Comentado pois, foi adicionado o retorno dos dados de um select dentro de uma transação, e, esta linha estava fazendo o commit da transacao
-                            //$pdo_obj->commit();
-                        }
-                        $retorno_err = ["Nada encontrado",710];
-                        if($usar_exception_nao_encontrado) {
-                            //GERAR EXCEPTION
-                            $this->setLog($retorno_err[0].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
-                            throw new Exception($retorno_err[0], $retorno_err[1]);
-                        } else {
-                            $this->setLog($retorno_err[1].' - QUERY: '.$query.' - VALORES: '.json_encode($parametros), 'error');
-                            //NÃO GERAR EXCEPTION
-                            $retorno_suc = $retorno_err[1];
-                        }
-                    }
-
-                } else {
-                    if($this->contarLinhasAfetadas) {
-                        $retorno_suc = (object) ["AFETADAS"=>$data->rowCount()];
-                        $this->setLinhasAfetadas($retorno_suc);
-                    }
-
-                    if($usar_transacao and $iniciar_transaction /*and $pdo_obj->inTransaction()*/) {
-                        if($this->transacao_multipla) {
-                            if($this->finalizar_multipla) {
-                                if($rollback)
-                                    $pdo_obj->rollBack();
-                                else
-                                    $pdo_obj->commit();
-                            }
-                        } else {
-                            if($rollback)
-                                $pdo_obj->rollBack();
-                            else
-                                $pdo_obj->commit();
-                        }
-                    }
-                    $retorno_suc = $this->contarLinhasAfetadas ? $retorno_suc : $exec; // Retornos de INSERTS e UPDATES
-                }
-
-                if($this->gerar_log) {
-                    $this->setLog(json_encode([$retorno_suc, "query_sql" => $query, "valores_query" => $parametros]), 'info');
-                }
-
-                return $retorno_suc;
-
-            } catch (PDOException $e) {
-                if($pdo_obj->inTransaction()) {
-                    $pdo_obj->rollBack();
-                }
-                $code = $e->getCode() == 710 ? $e->getCode() : 503;
-                $msg = $e->getMessage().' - Query executarSQL: '.$query;
-                $retorno_err = [$msg, $code];
-                $this->setLog($msg.' - VALORES: '.json_encode($parametros), 'critical');
-
-                throw new Exception($retorno_err[0], $retorno_err[1]);
-            }
-
-        } else {
-            throw new Exception("A Query passada não é válida", 003);
+            $pdo_obj->beginTransaction();
+            $this->setPDO($pdo_obj);
         }
+
+        try {
+            $not_enabled = ['firebird', 'sqlite'];
+            if (!in_array(self::$driver, $not_enabled)) {
+                $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
+            }
+
+            $data = $pdo_obj->prepare($query);
+
+            if ($parametros != false) {
+                if (!(is_array($parametros) AND count($parametros) != 0)) {
+                    $msg = 'É necessário passar um array não nulo';
+                    $this->setLog($msg, 'error');
+                    throw new AppException($msg, 002);
+                }
+
+                for ($i = 0; $i < count($parametros); $i++) {
+                    $dados_query = $parametros[$i];
+                    if (is_integer($dados_query))
+                        $is_int = PDO::PARAM_INT;
+                    elseif (is_bool($dados_query))
+                        $is_int = PDO::PARAM_BOOL;
+                    elseif (is_null($dados_query))
+                        $is_int = PDO::PARAM_NULL;
+                    else
+                        $is_int = PDO::PARAM_STR;
+                    $data->bindValue(($i + 1), $parametros[$i], $is_int);
+                }
+
+            }
+            if (isset($data1)) {
+                $data1->execute();
+            }
+
+            $exec = $data->execute();
+
+            if ($tipo == 'select') {
+                $tipo_retorno = PDO::FETCH_OBJ; // Retorna tipo objetos
+                if (isset(self::$opcoes['return_type'])) {
+                    if ((int)self::$opcoes['return_type'] == 2) {
+                        $tipo_retorno = PDO::FETCH_NAMED; // Retorna Tipo array
+                    }
+                }
+                $data_return = $data->fetchAll($tipo_retorno);
+
+                if (count($data_return) == 0) {
+                    $retorno_err = ["Nada encontrado", 710];
+                    if ($exception_nao_encontrado) {
+                        //GERAR EXCEPTION
+                        $msgUsuario = !$msg_nao_encontrado ? $retorno_err[0] : $msg_nao_encontrado;
+                        $this->setLog($retorno_err[0] . ' - QUERY: ' . $query . ' - VALORES: ' . json_encode($parametros), 'error');
+                        $erro = [$retorno_err[0], $retorno_err[1], 404, $msgUsuario];
+                    }
+                    $this->setLog($retorno_err[1] . ' - QUERY: ' . $query . ' - VALORES: ' . json_encode($parametros), 'error');
+                    //NÃO GERAR EXCEPTION
+                    $retorno_suc = !$retornar_false_nao_encontrado ? $retorno_err[1] : false;
+                } else {
+                    $retorno_suc = $data_return;
+                }
+            }
+
+            if ($tipo != 'select') {
+
+                $usar = $data->rowCount();
+
+                if (strcmp(strtolower($query_analize[0]), "insert") == 0) {
+                    $this->count_afetadas_insert += $data->rowCount();
+                    $usar = $this->count_afetadas_insert;
+                }
+
+                $this->setLinhasAfetadas($usar);
+
+                $retorno_suc = $exec;
+            }
+
+        } catch (AppException $e) {
+            $this->rollback();
+
+            $this->count_afetadas_insert = 0;
+            $code = $e->getCode() == 710 ? $e->getCode() : 503;
+            $msg = $e->getMessage().' - Query executarSQL: '.$query;
+            $retorno_err = [$msg, $code];
+            $this->setLog($msg.' - VALORES: '.json_encode($parametros), 'critical');
+
+            throw new AppException($retorno_err[0], $retorno_err[1]);
+        }
+
+        if (isset($erro)) {
+            $erro_msg = $erro[0];
+            $cod_erro = $erro[1];
+            $cod_http_erro = isset($erro[2]) ? $erro[2] : 500;
+            $msg_usuario_erro = isset($erro[3]) ? $erro[3] : '';
+
+            if($cod_erro == 710) {
+                $erro_msg = 'Nada encontrado na query: '.$query.' com os valores = '.json_encode($parametros);
+            }
+
+            throw new AppException($erro_msg, $cod_erro, $cod_http_erro, $msg_usuario_erro);
+        }
+
+        if($this->gravar_log_complexo == false) {
+            $this->setLogComplexo($query, $parametros);
+            $this->gravar_log_complexo = true;
+        }
+
+        if ($this->gerar_log) {
+            $this->setLog(json_encode([$retorno_suc, "query_sql" => $query, "valores_query" => $parametros]), 'info');
+        }
+
+        return $retorno_suc;
+
     }
 
     protected function limparValores($union=false)
@@ -510,9 +513,9 @@ class BuildQuery implements iBuildQuery
     {
         if(!is_string($tipo)) {
             $msg_erro = "O tipo precisa ser uma string";
-        } elseif(!is_string($tabela)) {
+        } /*elseif(!is_string($tabela)) { // Removido para ter a instância da classe reutilizável
             $msg_erro = "A tabela precisa ser uma string";
-        } elseif(!is_string($tabela_join)) {
+        }*/ elseif(!is_string($tabela_join)) {
             $msg_erro = "A tabela do join precisa ser uma string";
         } elseif(!is_string($comparativo)) {
             $msg_erro = "O comparativo precisa ser uma string";
@@ -573,14 +576,6 @@ class BuildQuery implements iBuildQuery
 
     }
 
-    public function setRoolback()
-    {
-        if($this->pdo()->inTransaction()) {
-            $this->pdo()->rollBack();
-        }
-        return $this;
-    }
-
     public function tabela($tabela)
     {
         $this->table_in = $tabela;
@@ -590,7 +585,7 @@ class BuildQuery implements iBuildQuery
     public function campos($campos,$update=false)
     {
         if(!is_array($campos)) {
-            throw new Exception("É necessário que os campos sejam passados em um array",853);
+            throw new AppException("É necessário que os campos sejam passados em um array",853);
         } else {
             if ($update != false) {
                 if (!is_array($update)) {
@@ -604,7 +599,7 @@ class BuildQuery implements iBuildQuery
                         $this->valores_add = $update;
                         $this->list_inter = $interrogas;
                     } else {
-                        throw new Exception("A quantidade de campos e de valores não coincidem -> ".json_encode( $campos ),109);
+                        throw new AppException("A quantidade de campos e de valores não coincidem -> ".json_encode( $campos ),109);
                     }
                 }
             }
@@ -676,7 +671,6 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-
     public function whereComplex($campos, $operadores, $valores, $oper_logicos=false)
     {
         if(!is_array($campos)) {
@@ -730,7 +724,7 @@ class BuildQuery implements iBuildQuery
                             $s .= $oper_logicos[0]." (".$campos[0]." ".$operadores[0]." ".$interrogacoes." ";
                         } elseif($i == count($campos) - 1) {
                             //$this->valores_insert[] = $valores[$i];
-                            $s .=   $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
+                            $s .=	$oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
                             $this->whereComplex[] = $s;
                         } else {
                             //$this->valores_insert[] = $valores[$i];
@@ -801,9 +795,9 @@ class BuildQuery implements iBuildQuery
     public function insertSelect($tabela,$campos)
     {
         if(!is_array($campos)) {
-            throw new Exception("Os campos do insertSelect precisam ser passados em um array");
+            throw new AppException("Os campos do insertSelect precisam ser passados em um array");
         } elseif(!is_string($tabela)) {
-            throw new Exception("A tabela do insertSelect precisa ser uma String");
+            throw new AppException("A tabela do insertSelect precisa ser uma String");
         } else {
             $campos_usar = implode(",",$campos);
             $this->insertSelect = "SELECT ".$campos_usar." FROM ".$tabela;
@@ -832,15 +826,6 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function setTransactionUnitaria($pos=2, $fim=1,$rollback=false)
-    {
-        $this->comTransaction = true;
-        $this->fazer_rollback = $rollback;
-        $this->posTransaction = $pos;
-        $this->fimTransaction = $fim;
-        return $this;
-    }
-
     public function setMsgNaoEncontrado($msg)
     {
         $this->nao_encontrado_per = $msg;
@@ -853,19 +838,12 @@ class BuildQuery implements iBuildQuery
             $this->limite = $limite;
             $this->offset = $offset;
 
-            if(self::$driver != 'firebird') {
-                $this->valores_insert_final[] = (int) $limite;
-            } else {
-                array_splice( $this->valores_insert, 0, 0, [(int) $limite] );
-            }
+            $this->valores_insert_final[] = (int) $limite;
+            //$this->valores_insert[] = (int) $limite;
         }
 
         if($offset != false) {
-            if(self::$driver != 'firebird') {
-                $this->valores_insert_final[] = (int) $offset;
-            } else {
-                array_splice( $this->valores_insert, 1, 0, [(int) $offset] );
-            }
+            $this->valores_insert_final[] = (int) $offset;
         }
 
         return $this;
@@ -883,21 +861,9 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    public function setTransacaoMultipla()
+    public function setFalseNaoEncontrado($usar = true)
     {
-        $this->transacao_multipla = true;
-        $this->comTransaction = true;
-        $this->posTransaction = $this->pos_multipla;
-        $this->pos_multipla++;
-        return $this;
-    }
-
-    public function setCompletarTransacaoMultipla($rollback=false)
-    {
-        $this->comTransaction = true;
-        $this->fazer_rollback = $rollback;
-        $this->fimTransaction = $this->posTransaction;
-        $this->finalizar_multipla = true;
+        $this->retornar_false_not_found = $usar;
         return $this;
     }
 
@@ -911,19 +877,13 @@ class BuildQuery implements iBuildQuery
         return $this->linhas_afetadas;
     }
 
-    public function getRetornarLinhasAfetadas()
-    {
-        $this->contarLinhasAfetadas = true;
-        return $this;
-    }
-
     public function setRetornoPersonalizado($retorno)
     {
         if(!is_array($retorno)) {
-            throw new Exception('Tipo de retorno personalizado não é um array',8);
+            throw new AppException('Tipo de retorno personalizado não é um array',8);
         }
-       $this->retorno_personalizado = $retorno;
-       return $this;
+        $this->retorno_personalizado = $retorno;
+        return $this;
     }
 
     public function setEventosGravar($eventos)
@@ -931,7 +891,7 @@ class BuildQuery implements iBuildQuery
         if(is_array($eventos)) {
             $this->eventos_gravar = @array_map('strtoupper', $eventos);
         } else {
-            throw new Exception('Os tipos de eventos passados não são um array', 15165);
+            throw new AppException('Os tipos de eventos passados não são um array', 15165);
         }
         return $this;
     }
@@ -942,27 +902,29 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
-    protected function setLogComplexo($type,$act)
+    protected function setLogComplexo($query, $parametros)
     {
-        if($type != false AND $this->eventos_gravar != false){
-            if(in_array($act->method, $this->eventos_gravar)) {
-                $type($act->setLogandoComplexo(), $act->method);
+        if($this->eventos_gravar != false){
+            if(in_array($this->method, $this->eventos_gravar)) {
+                if(is_callable($this->eventos_retornar)) $this->eventos_retornar($this->method, $query, $parametros);
             }
         }
     }
 
-    protected function setDadosSelectTransacao($dados)
+    public function getFullWhere()
     {
-        $this->dados_select_transacao = $dados;
-        return $this;
+        $where = ($this->where != false) ? " ".$this->where : "";
+        $whereComplex = ($this->whereComplex != false) ? " ".implode(" ",$this->whereComplex) : "";
+        $whereAnd = $this->whereAnd != false ? " ".implode(" ",$this->whereAnd) : '';
+        $whereOr = $this->whereOr != false ? " ".implode(" ",$this->whereOr) : '';
+
+        return $where
+            . $whereOr
+            . $whereAnd
+            . $whereComplex;
     }
 
-    public function getDadosSelectTransacao()
-    {
-        return $this->dados_select_transacao;
-    }
-
-    public function buildQuery($tipo,$usando_union_transacao=false)
+    public function buildQuery($tipo, $usando_union=false)
     {
         $this->create($tipo,$this->table_in);
 
@@ -980,17 +942,14 @@ class BuildQuery implements iBuildQuery
             if($this->msg_erro != false) {
                 $msg = (isset($msg)) ? $msg : $this->msg_erro;
                 $code_erro_return = isset($code_error) ? $code_error : 405;
-                throw new Exception($msg, $code_erro_return);
+                throw new AppException($msg, $code_erro_return);
             }
 
         }
 
         $campos_usar = (isset($this->campos_table) && $this->campos_table != false) ? implode(",",$this->campos_table) : "*";
-        $where = ($this->where != false) ? " ".$this->where : "";
 
-        $whereComplex = ($this->whereComplex != false) ? " ".implode(" ",$this->whereComplex) : "";
-        $whereAnd = $this->whereAnd != false ? " ".implode(" ",$this->whereAnd) : '';
-        $whereOr = $this->whereOr != false ? " ".implode(" ",$this->whereOr) : '';
+
         $orderby = ($this->orderBy != false) ? " ".$this->orderBy : "";
         $union = ($this->union != false && $this->unionAll == false) ? $this->union : '';
         $unionAll = ($this->union == false && $this->unionAll != false) ? $this->unionAll : '';
@@ -1032,17 +991,14 @@ class BuildQuery implements iBuildQuery
                 . $rightjoin
                 . $innerjoin
                 . $fullouterjoin
-                . $where
-                . $whereOr
-                . $whereAnd
-                . $whereComplex
+                . $this->getFullWhere()
                 . $groupby
                 . $orderby
                 . $limite;
 
         } elseif ($this->method == "INSERT") {
             if($this->list_inter == false AND $this->insertSelect == false) {
-                throw new Exception("É ncessário passar os valores dos campos",007);
+                throw new AppException("É ncessário passar os valores dos campos",007);
 
             } else {
                 switch ($this->insertSelect) {
@@ -1056,10 +1012,7 @@ class BuildQuery implements iBuildQuery
                             . $rightjoin
                             . $innerjoin
                             . $fullouterjoin
-                            . $where
-                            . $whereOr
-                            . $whereAnd
-                            . $whereComplex
+                            . $this->getFullWhere()
                             . $groupby
                             . $orderby;
                         break;
@@ -1088,24 +1041,18 @@ class BuildQuery implements iBuildQuery
                     . $this->table . " "
                     . $this->util . " "
                     . $campos_usar . ""
-                    . $where
-                    . $whereOr
-                    . $whereAnd
-                    . $whereComplex;
+                    . $this->getFullWhere();
             } else {
-                throw new Exception('Layout incorreto para o método UPDATE ',107);
+                throw new AppException('Layout incorreto para o método UPDATE ',107);
             }
         } elseif($this->method == "DELETE") {
             $string_build = $this->method . " "
                 . $this->util . " "
                 . $this->table . ""
-                . $where
-                . $whereOr
-                . $whereAnd
-                . $whereComplex
+                . $this->getFullWhere()
                 . $groupby;
         } else {
-            throw new Exception("Metódo desconhecido", 108);
+            throw new AppException("Metódo desconhecido", 108);
 
         }
 
@@ -1115,45 +1062,39 @@ class BuildQuery implements iBuildQuery
         $this->valores_insert_bd[] = $this->valores_insert;
         $pdo_obj = $this->pdo_obj_usando != false ? $this->pdo_obj_usando : false;
 
-        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true) {
-            try {
-                $count_insert_bd = count($this->valores_insert_bd);
-                if($count_insert_bd > 0) {
-                    $dados_insert_query = [];
+        /*if($this->gravar_log_complexo == false) {
+            $this->setLogComplexo($this->gravarsetLogComplexo, $this);
+            $this->gravar_log_complexo = true;
+        }*/
 
-                    foreach ($this->valores_insert_bd as $i => $matriz_insert) {
-                        foreach ($matriz_insert as $j => $elemento_insert) {
-                            $dados_insert_query[] = $elemento_insert;
-                        }
-                    }
+        $query = $this->query_union;
+        $parametros = false;
 
-                    $dados_insert_query = is_array($dados_insert_query) ? $dados_insert_query : [$dados_insert_query];
-                    if(count($this->valores_insert_final) > 0) {
-                        $dados_insert_query = array_merge($dados_insert_query, $this->valores_insert_final);
-                    }
-                    $retorno = $this->executarSQL($this->query_union, $dados_insert_query,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $this->fazer_rollback, $pdo_obj);
-                } else {
-                    $retorno = $this->executarSQL($this->query_union, false,$this->comTransaction, $this->exception_not_found, $this->posTransaction,$this->fimTransaction, $this->fazer_rollback, $pdo_obj);
+        $count_insert_bd = count($this->valores_insert_bd);
+
+        if($count_insert_bd > 0) {
+            $dados_insert_query = [];
+
+            foreach ($this->valores_insert_bd as $i => $matriz_insert) {
+                foreach ($matriz_insert as $j => $elemento_insert) {
+                    $dados_insert_query[] = $elemento_insert;
                 }
-
-                $retornar_na_transacao = $retorno;
-
-                if($this->transacao_multipla and $this->finalizar_multipla != true) {
-                    $retorno = $this;
-                    $retorno_this = true;
-                }
-
-            } catch(Exception $e) {
-                $valores_query = json_encode($dados_insert_query);
-                $msg_error = ($e->getCode() == 710) ? $msg_nao_encontrado.';'.$this->gerar_log.';'.$this->query_union . ' Valores: '.$valores_query : "Erro no banco de dados: ".$e->getMessage().'. Query: '.$this->query_union." -> valores_query => ".json_encode($dados_insert_query);
-                throw new  Exception($msg_error, (int) $e->getCode());
             }
 
-        } else {
-            $retorno = $this;
-            $retorno_this = true;
+            $dados_insert_query = is_array($dados_insert_query) ? $dados_insert_query : [$dados_insert_query];
+
+            if (count($this->valores_insert_final) > 0) {
+                $dados_insert_query = array_merge($dados_insert_query, $this->valores_insert_final);
+            }
+
+            $parametros = $dados_insert_query;
         }
-        if(!$usando_union_transacao || $this->transacao_multipla == true || $this->finalizar_multipla == true) {
+
+        //$this->query_executar[] = [$query, $parametros];
+        $executar = $this;
+        if(!$usando_union) $executar = $this->executarSQL($query, $parametros);
+
+        if(!$usando_union) {
             if($this->gerar_log) {
                 //$valores_query = json_encode($dados_insert_query);
                 //$this->setLog(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
@@ -1164,18 +1105,8 @@ class BuildQuery implements iBuildQuery
             $this->query_union = '';
         }
 
-        if($retorno_personalizado != false) return array_merge(["DADOS"=>$retorno], $retorno_personalizado);
+        if($retorno_personalizado != false) return array_merge(["DADOS"=>$executar], $retorno_personalizado);
 
-        if($this->gravar_log_complexo == false) {
-            $this->setLogComplexo($this->gravarsetLogComplexo, $this);
-            $this->gravar_log_complexo = true;
-        }
-
-        if(isset($is_select) and isset($retornar_na_transacao) and ($this->transacao_multipla)) {
-            $this->setDadosSelectTransacao($retornar_na_transacao);
-        }
-
-        return $retorno;
+        return $executar;
     }
-
 }
