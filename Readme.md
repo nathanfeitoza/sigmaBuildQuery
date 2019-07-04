@@ -152,11 +152,13 @@ The methods of querybuilder are shown below:
         ->createTable();
    ```
    
-   Drop Table
+   ## Drop Table
 
    ```php
      $var->tabela('teste123')->dropTable();
    ```
+
+   ## Create View 
 
    Create view use this example below.
 
@@ -167,7 +169,7 @@ The methods of querybuilder are shown below:
         ->createView('view_teste');
    ```
 
-   Drop View
+  ## Drop View
 
    ```php
      $var->dropView('view_teste');
