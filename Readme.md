@@ -129,7 +129,7 @@ The methods of querybuilder are shown below:
         };
    ```
 
-   # Execute DDL comands
+   # DDL comands
 
    ## Create Table
 
