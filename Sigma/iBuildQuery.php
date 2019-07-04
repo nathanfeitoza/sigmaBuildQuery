@@ -9,8 +9,8 @@ namespace Sigma;
 interface iBuildQuery
 {
 
-    public static function init($driver, $host, $dbname, $user, $pass, $opcoes=false);
-    public function executarSQL($query, $parametros=false);
+    //public static function init($driver, $host, $dbname, $user, $pass, $opcoes=false);
+    public function execSql($query, $parametros=false);
     public function tabela($tabela);
     public function campos($campos,$update=false);
     public function where($campo,$operador,$valor);
@@ -32,4 +32,11 @@ interface iBuildQuery
     public function setUsarExceptionNaoEncontrado($usar=true);
     public function setRetornoPersonalizado($retorno);
     public function buildQuery($tipo,$usando_union=false);
+    public function showTables();
+    public function camposDdlCreate(Array $campos, $primary_key = false);
+    public function setEngineMysql($engine);
+    public function setDefaultCharacter($caracter);
+    public function setCollate($collate);
+    public function createTable();
+    public function dropTable();
 }

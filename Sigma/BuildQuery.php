@@ -4,30 +4,43 @@
  * User: nathan
  * Date: 11/09/17
  * Time: 23:55
+ * 
+ * This class was used for generate the codes sql to execute by PDO easy
+ * This class use Exception to trigger erros what the best method to break the critical execution
+ * 
  */
 
 namespace Sigma;
 
 use PDO;
-use Exception;
 use json_encode;
 
 class BuildQuery implements iBuildQuery
 {
-    private static $con;
-    private static $driver;
-    private static $dbname;
-    private static $host;
-    private static $user;
-    private static $pass;
-    private static $opcoes;
+    /**
+     * Declaration of variables connection
+     *
+     * @var [type]
+     */
+    private $con;
+    private $driver;
+    private $dbname;
+    private $host;
+    private $user;
+    private $pass;
+    private $opcoes;
 
+    /**
+     * Declaration of variables is storages for data
+     *
+     * @var [type]
+     */
     private $method;
     private $util;
     private $table;
     private $table_in;
     private $string_build;
-    private $campos_table;
+    private $campos_table, $campos_ddl;
     private $where = false;
     private $whereOr = false;
     private $whereAnd = false;
@@ -64,27 +77,28 @@ class BuildQuery implements iBuildQuery
     private $transacao_multipla = false, $pos_multipla = 0, $finalizar_multipla = false;
     protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false, $eventos_retornar = false;
     protected $pdo_padrao = false, $gravar_log_complexo = false, $dados_select_transacao;
-    private static $logger = false, $file_handler = false;
-    private $count_afetadas_insert = 0;
+    private $logger = false, $file_handler = false;
+    private $count_afetadas_insert = 0, $engineMysql, $characterMysql, $collateMysql;
     public $gravarsetLogComplexo;
 
-    private function __construct(){}
-
-    public static function init($driver, $host, $dbname, $user, $pass, $opcoes=false)
-    {
-        self::$driver = $driver;
-        self::$host = $host;
-        self::$dbname = $dbname;
-        self::$user = $user;
-        self::$pass = $pass;
-        self::$opcoes = $opcoes;
-        self::$logger = new \Monolog\Logger('BDLOG');
+    /**
+     * The construct is private for class special call and not use 'new' only Sigma/BuildQuery($data)
+     */
+    public function __construct($driver, $host, $dbname, $user, $pass, $opcoes=false)
+    {  
+        $this->driver = $driver;
+        $this->host = $host;
+        $this->dbname = $dbname;
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->opcoes = $opcoes;
+        $this->logger = new \Monolog\Logger('BDLOG');
         $local_logs = isset($opcoes['dir_log']) ? $opcoes['dir_log'] : __DIR__.DIRECTORY_SEPARATOR;
         $nome_arquivo = date('d-m-Y');
         $local_logs .= $nome_arquivo.'_BuildQuery.log';
-        self::$file_handler = new \Monolog\Handler\StreamHandler($local_logs);
+        $this->file_handler = new \Monolog\Handler\StreamHandler($local_logs);
 
-        switch (self::$driver) {
+        switch ($this->driver) {
             case "postgres":
                 $db = "pgsql:";
                 break;
@@ -104,22 +118,22 @@ class BuildQuery implements iBuildQuery
 
         if(!isset($err)) {
             try {
-                $dsn = self::$dbname != false ? $db . "host=" . self::$host . ";dbname=" . self::$dbname :  $db . "host=" . self::$host;
+                $dsn = $this->dbname != false ? $db . "host=" . $this->host . ";dbname=" . $this->dbname :  $db . "host=" . $this->host;
                 if($db == "firebird:") {
-                    $dsn = $db."dbname=".self::$host.':'.self::$dbname;
+                    $dsn = $db."dbname=".$this->host.':'.$this->dbname;
                 }
                 elseif($db == "sqlite:") {
-                    $dsn = $db."".self::$host;
+                    $dsn = $db."".$this->host;
                 }
-                if(isset(self::$opcoes['port'])) {
-                    $porta = self::$opcoes['port'];
+                if(isset($this->opcoes['port'])) {
+                    $porta = $this->opcoes['port'];
                     if(is_numeric($porta)) {
                         $dsn = $dsn.";port=".(int) $porta;
                     }
                 }
                 $pdo_case = PDO::CASE_NATURAL;
-                if(isset(self::$opcoes['nome_campos'])) {
-                    $nome_campos = self::$opcoes['nome_campos'];
+                if(isset($this->opcoes['nome_campos'])) {
+                    $nome_campos = $this->opcoes['nome_campos'];
                     if(!empty($nome_campos)) {
                         switch ( strtolower( $nome_campos ) ) {
                             case 'mai':
@@ -137,15 +151,15 @@ class BuildQuery implements iBuildQuery
                 ];
 
                 if($db == "mysql:") {
-                    $usar = isset(self::$opcoes['name_utf8_mysql']) ? self::$opcoes['name_utf8_mysql'] : false;
+                    $usar = isset($this->opcoes['name_utf8_mysql']) ? $this->opcoes['name_utf8_mysql'] : false;
                     if((boolean) $usar) {
                         $opcs[] = [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8'];
                     }
                 }
 
-                self::$con = new PDO($dsn, self::$user, self::$pass, $opcs);
-                return new self;
-                //return self::$con;
+                $this->con = new PDO($dsn, $this->user, $this->pass, $opcs);
+                return $this;
+                //return $this->con;
             } catch (PDOException $e) {
                 $msg = "ERRO DE CONEXÃO " . $e->getMessage();
                 throw new AppException($msg, $e->getCode());
@@ -156,72 +170,120 @@ class BuildQuery implements iBuildQuery
         }
     }
 
+    /**
+     * This Method set the log of class using Monolog
+     *
+     * @param [type] $msg
+     * @param [type] $type
+     * @return void
+     */
     protected function setLog($msg, $type)
     {
-        self::$logger->pushHandler(self::$file_handler);
-        $configs_db = [ self::$driver,
-            self::$host,
-            self::$dbname,
-            self::$user];
+        $this->logger->pushHandler($this->file_handler);
+        $configs_db = [ $this->driver,
+            $this->host,
+            $this->dbname,
+            $this->user];
         $msg .= ' - DADOS DB: '.json_encode($configs_db);
         switch( strtolower( $type ) ) {
             case 'error':
-                self::$logger->addError($msg);
+                $this->logger->addError($msg);
                 break;
             case 'alert':
-                self::$logger->addAlert($msg);
+                $this->logger->addAlert($msg);
                 break;
             case 'critical':
-                self::$logger->addCritical($msg);
+                $this->logger->addCritical($msg);
                 break;
             case 'debug':
-                self::$logger->addDebug($msg);
+                $this->logger->addDebug($msg);
                 break;
             case 'emergency':
-                self::$logger->addEmergency($msg);
+                $this->logger->addEmergency($msg);
                 break;
             case 'notice':
-                self::$logger->addNotice($msg);
+                $this->logger->addNotice($msg);
                 break;
             case 'record':
-                self::$logger->addRecord($msg);
+                $this->logger->addRecord($msg);
                 break;
             case 'warning':
-                self::$logger->addWarning($msg);
+                $this->logger->addWarning($msg);
                 break;
             default:
-                self::$logger->addInfo($msg);
+                $this->logger->addInfo($msg);
         }
     }
 
+    private final function getMarcador()
+    {
+        $marcador = "'";
+        if($this->driver == "mysql") $marcador = '`';
+
+        return $marcador;
+    }
+
+    /**
+     * This method setPdo for reuse in execution, for example, transaction
+     *
+     * @param [type] $pdo
+     * @return void
+     */
     protected function setPDO($pdo)
     {
         $this->pdo_padrao = $pdo;
     }
 
+    /**
+     * Get the PDO instance
+     *
+     * @return void
+     */
     protected function pdo()
     {
-        $this->pdo_padrao = !$this->pdo_padrao ? self::$con : $this->pdo_padrao;
+        $this->pdo_padrao = !$this->pdo_padrao ? $this->con : $this->pdo_padrao;
         return $this->pdo_padrao;
     }
 
+    /**
+     * Init transaction
+     *
+     * @return void
+     */
     public function iniciarTransacao()
     {
         $this->iniciar_transacao = true;
         return $this;
     }
 
+    /**
+     * Rollback the transaction. Automatically executed in Exception
+     *
+     * @return void
+     */
     public function rollback()
     {
         if($this->pdo()->inTransaction()) $this->pdo()->rollback();
     }
 
+    /**
+     * Commit the transaction
+     *
+     * @return void
+     */
     public function commit()
     {
         if($this->pdo()->inTransaction()) $this->pdo()->commit();
     }
 
-    public function executarSQL($query, $parametros=false)
+    /**
+     * This method exec sql commands
+     *
+     * @param [type] $query
+     * @param boolean $parametros
+     * @return void
+     */
+    public function execSql($query, $parametros=false)
     {
         $exception_nao_encontrado = $this->exception_not_found;
         $retornar_false_nao_encontrado = $this->retornar_false_not_found;
@@ -236,7 +298,7 @@ class BuildQuery implements iBuildQuery
 
 
         if ($this->iniciar_transacao and !$pdo_obj->inTransaction()) {
-            if (strtolower(self::$driver) == "firebird") $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
+            if (strtolower($this->driver) == "firebird") $pdo_obj->setAttribute(PDO::ATTR_AUTOCOMMIT, 0);
 
             $pdo_obj->beginTransaction();
             $this->setPDO($pdo_obj);
@@ -244,7 +306,7 @@ class BuildQuery implements iBuildQuery
 
         try {
             $not_enabled = ['firebird', 'sqlite'];
-            if (!in_array(self::$driver, $not_enabled)) {
+            if (!in_array($this->driver, $not_enabled)) {
                 $data1 = $pdo_obj->prepare("SET NAMES 'UTF8'");
             }
 
@@ -267,23 +329,27 @@ class BuildQuery implements iBuildQuery
                         $is_int = PDO::PARAM_NULL;
                     else
                         $is_int = PDO::PARAM_STR;
+                    
                     $data->bindValue(($i + 1), $parametros[$i], $is_int);
                 }
 
             }
-            if (isset($data1)) {
-                $data1->execute();
-            }
 
+            if (isset($data1)) $data1->execute();
+            
             $exec = $data->execute();
 
-            if ($tipo == 'select') {
+            $enable_fetch = in_array($tipo, ['select', 'show']);
+
+            if ($enable_fetch) {
                 $tipo_retorno = PDO::FETCH_OBJ; // Retorna tipo objetos
-                if (isset(self::$opcoes['return_type'])) {
-                    if ((int)self::$opcoes['return_type'] == 2) {
+                
+                if (isset($this->opcoes['return_type'])) {
+                    if ((int)$this->opcoes['return_type'] == 2) {
                         $tipo_retorno = PDO::FETCH_NAMED; // Retorna Tipo array
                     }
                 }
+
                 $data_return = $data->fetchAll($tipo_retorno);
 
                 if (count($data_return) == 0) {
@@ -302,7 +368,7 @@ class BuildQuery implements iBuildQuery
                 }
             }
 
-            if ($tipo != 'select') {
+            if (!$enable_fetch) {
 
                 $usar = $data->rowCount();
 
@@ -321,7 +387,7 @@ class BuildQuery implements iBuildQuery
 
             $this->count_afetadas_insert = 0;
             $code = $e->getCode() == 710 ? $e->getCode() : 503;
-            $msg = $e->getMessage().' - Query executarSQL: '.$query;
+            $msg = $e->getMessage().' - Query execSql: '.$query;
             $retorno_err = [$msg, $code];
             $this->setLog($msg.' - VALORES: '.json_encode($parametros), 'critical');
 
@@ -331,14 +397,12 @@ class BuildQuery implements iBuildQuery
         if (isset($erro)) {
             $erro_msg = $erro[0];
             $cod_erro = $erro[1];
-            $cod_http_erro = isset($erro[2]) ? $erro[2] : 500;
-            $msg_usuario_erro = isset($erro[3]) ? $erro[3] : '';
 
             if($cod_erro == 710) {
                 $erro_msg = 'Nada encontrado na query: '.$query.' com os valores = '.json_encode($parametros);
             }
 
-            throw new AppException($erro_msg, $cod_erro, $cod_http_erro, $msg_usuario_erro);
+            throw new AppException($erro_msg, $cod_erro);
         }
 
         if($this->gravar_log_complexo == false) {
@@ -354,6 +418,12 @@ class BuildQuery implements iBuildQuery
 
     }
 
+    /**
+     * The method clear values for reuse in union or multiples calls to object instance class in code flow
+     *
+     * @param boolean $union
+     * @return void
+     */
     protected function limparValores($union=false)
     {
         $array_valores = [
@@ -361,6 +431,7 @@ class BuildQuery implements iBuildQuery
             'table_in',
             'string_build',
             'campos_table',
+            'campos_ddl',
             'where',
             'whereOr',
             'whereAnd',
@@ -395,6 +466,7 @@ class BuildQuery implements iBuildQuery
                 'string_build',
                 'retorno_personalizado',
                 'campos_table',
+                'campos_ddl',
                 'where',
                 'whereOr',
                 'whereAnd',
@@ -440,9 +512,17 @@ class BuildQuery implements iBuildQuery
                 $this->$key = $valor;
             }
         }
+
         return $this;
     }
 
+    /**
+     * Create the head for command DML
+     *
+     * @param [type] $tipo
+     * @param [type] $table
+     * @return void
+     */
     protected function create($tipo, $table)
     {
         $this->table = $table;
@@ -471,6 +551,16 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
+    /**
+     * Adjust Wheres for all databases
+     *
+     * @param [type] $tipo
+     * @param [type] $campo
+     * @param [type] $operador_comparacao
+     * @param [type] $valor
+     * @param boolean $status_where
+     * @return void
+     */
     protected function ajustarWhere($tipo,$campo,$operador_comparacao,$valor,$status_where = false)
     {
         if(!is_string($campo)) {
@@ -508,7 +598,16 @@ class BuildQuery implements iBuildQuery
 
     }
 
-    // O comparativo dever ser feita em uma string da seguinte forma "a.tabela1 = b.tabela2"
+    /**
+     * Adjust join to all databases
+     * The comparison should be made in a string as follows "a.table1 = b.table2"
+     * 
+     * @param [type] $tipo
+     * @param [type] $tabela
+     * @param [type] $tabela_join
+     * @param [type] $comparativo
+     * @return void
+     */
     protected function ajustarJoin($tipo, $tabela,$tabela_join,$comparativo)
     {
         if(!is_string($tipo)) {
@@ -554,17 +653,24 @@ class BuildQuery implements iBuildQuery
         }
 
     }
-
-    protected function ajustarGroupBy($tabela,$having=false)
+    
+    /**
+     * Adjust GroupBy for all databases
+     *
+     * @param [type] $tabela
+     * @param boolean $having
+     * @return void
+     */
+    protected function ajustarGroupBy($campos,$having=false)
     {
-        if(!is_string($tabela)) {
+        if(!is_string($campos)) {
             $msg = "A tabela do groupBy precisa ser uma string";
         } elseif($having != false &&  !is_string($having)) {
             $msg = "O having precisa ser uma string";
         } else {
             $use_having = ($having != false) ? " HAVING ".$having : "";
 
-            $group = " GROUP BY ".$tabela.$use_having;
+            $group = " GROUP BY ".$campos.$use_having;
         }
 
         if(isset($msg)) {
@@ -576,12 +682,25 @@ class BuildQuery implements iBuildQuery
 
     }
 
+    /**
+     * Set the table using in execution
+     *
+     * @param [type] $tabela
+     * @return void
+     */
     public function tabela($tabela)
     {
         $this->table_in = $tabela;
         return $this;
     }
 
+    /**
+     * Set the fields using in DML
+     *
+     * @param [type] $campos
+     * @param boolean $update
+     * @return void
+     */
     public function campos($campos,$update=false)
     {
         if(!is_array($campos)) {
@@ -610,7 +729,14 @@ class BuildQuery implements iBuildQuery
 
     }
 
-    // $insert = true, é para ser adicionado no banco, então retorna a ?
+    /**
+     * Verify brackets in sql code
+     * $insert = true, is to be added in the bank, then returns to ?
+     * 
+     * @param [type] $valor
+     * @param boolean $insert
+     * @return void
+     */
     protected function verificarParentese($valor,$insert=false)
     {
         preg_match("/\((.*?)\)/", $valor, $in_parenthesis);
@@ -626,6 +752,13 @@ class BuildQuery implements iBuildQuery
         return $valor;
     }
 
+    /**
+     * Add array of value to insert DML
+     *
+     * @param [type] $array
+     * @param boolean $delimitador
+     * @return void
+     */
     protected function addArrayValoresInsert($array, $delimitador=false)
     {
         $array = $delimitador != false ? explode($delimitador, $array) : $array;
@@ -635,6 +768,16 @@ class BuildQuery implements iBuildQuery
         return $this->valores_insert;
     }
 
+    /**
+     * Pre Adjust where and the normalize code sql with where
+     *
+     * @param [type] $tipo
+     * @param [type] $campo
+     * @param [type] $operador_comparacao
+     * @param [type] $valor
+     * @param boolean $status_where
+     * @return void
+     */
     protected function preAdjustWhere($tipo, $campo, $operador_comparacao, $valor, $status_where = false)
     {
         $valor_campo = "";
@@ -653,24 +796,57 @@ class BuildQuery implements iBuildQuery
         $this->ajustarWhere($tipo,$campo,$operador_comparacao,$valor_campo, $status_where);
     }
 
+    /**
+     * Set Where in DML
+     *
+     * @param [type] $campo
+     * @param [type] $operador_comparacao
+     * @param [type] $valor
+     * @return void
+     */
     public function where($campo,$operador_comparacao,$valor)
     {
         $this->preAdjustWhere("where",$campo,$operador_comparacao,$valor);
         return $this;
     }
 
+    /**
+     * Set where with OR comparation. Necessary Where before
+     *
+     * @param [type] $campo
+     * @param [type] $operador_comparacao
+     * @param [type] $valor
+     * @return void
+     */
     public function whereOr($campo,$operador_comparacao,$valor)
     {
         $this->preAdjustWhere("or",$campo,$operador_comparacao,$valor,$this->where);
         return $this;
     }
 
+    /**
+     * Set where with AND comparation. Necessary Where before
+     *
+     * @param [type] $campo
+     * @param [type] $operador_comparacao
+     * @param [type] $valor
+     * @return void
+     */
     public function whereAnd($campo,$operador_comparacao,$valor)
     {
         $this->preAdjustWhere("and",$campo,$operador_comparacao,$valor,$this->where);
         return $this;
     }
 
+    /**
+     * Whre with brackets and the various comparation. Necessary Where before
+     *
+     * @param [type] $campos
+     * @param [type] $operadores
+     * @param [type] $valores
+     * @param boolean $oper_logicos
+     * @return void
+     */
     public function whereComplex($campos, $operadores, $valores, $oper_logicos=false)
     {
         if(!is_array($campos)) {
@@ -702,7 +878,7 @@ class BuildQuery implements iBuildQuery
                 }
 
                 if($this->msg_erro == false) {
-                    $s = '';
+                    $string = '';
 
                     for($i = 0; $i < count($campos); $i++) {
                         $interrogacoes = "";
@@ -720,15 +896,12 @@ class BuildQuery implements iBuildQuery
                         }
 
                         if($i == 0) {
-                            //$this->valores_insert[] = $valores[0];
-                            $s .= $oper_logicos[0]." (".$campos[0]." ".$operadores[0]." ".$interrogacoes." ";
+                            $string .= $oper_logicos[0]." (".$campos[0]." ".$operadores[0]." ".$interrogacoes." ";
                         } elseif($i == count($campos) - 1) {
-                            //$this->valores_insert[] = $valores[$i];
-                            $s .=	$oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
-                            $this->whereComplex[] = $s;
+                            $string .=	$oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." )";
+                            $this->whereComplex[] = $string;
                         } else {
-                            //$this->valores_insert[] = $valores[$i];
-                            $s .= $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." ";
+                            $string .= $oper_logicos[$i]." ".$campos[$i]." ".$operadores[$i]." ".$interrogacoes." ";
                         }
                     }
                 }
@@ -738,42 +911,90 @@ class BuildQuery implements iBuildQuery
 
     }
 
+    /**
+     * Set LEFT JOIN
+     *
+     * @param [type] $tabela_join
+     * @param [type] $comparativo
+     * @return void
+     */
     public function leftJoin($tabela_join,$comparativo)
     {
         $this->ajustarJoin("leftJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
+    /**
+     * Set RIGHT JOIN
+     *
+     * @param [type] $tabela_join
+     * @param [type] $comparativo
+     * @return void
+     */
     public function rightJoin($tabela_join,$comparativo)
     {
         $this->ajustarJoin("rightJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
+    /**
+     * Set INNER JOIN
+     *
+     * @param [type] $tabela_join
+     * @param [type] $comparativo
+     * @return void
+     */
     public function innerJoin($tabela_join,$comparativo)
     {
         $this->ajustarJoin("innerJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
+    /**
+     * Set Full Outer Join
+     *
+     * @param [type] $tabela_join
+     * @param [type] $comparativo
+     * @return void
+     */
     public function fullOuterJoin($tabela_join,$comparativo)
     {
         $this->ajustarJoin("fullOuterJoin", $this->table_in,$tabela_join,$comparativo);
         return $this;
     }
 
-    public function groupBy($tabela)
+    /**
+     * Set GROUP BY
+     *
+     * @param [type] $tabela
+     * @return void
+     */
+    public function groupBy($campos)
     {
-        $this->ajustarGroupBy($tabela);
+        $this->ajustarGroupBy($campos);
         return $this;
     }
 
-    public function groupByHaving($tabela,$clausula)
+    /**
+     * Set GroupBy Having
+     *
+     * @param [type] $tabela
+     * @param [type] $clausula
+     * @return void
+     */
+    public function groupByHaving($campos,$clausula)
     {
-        $this->ajustarGroupBy($tabela,$clausula);
+        $this->ajustarGroupBy($campos,$clausula);
         return $this;
     }
 
+    /**
+     * Set Order BY. Is possible using in whatever code flow with class instance
+     *
+     * @param [type] $campo
+     * @param [type] $tipo
+     * @return void
+     */
     public function orderBy($campo, $tipo)
     {
         if(!is_string($campo)) {
@@ -792,6 +1013,13 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
+    /**
+     * Generate the insert with select in table and your fields
+     *
+     * @param [type] $tabela
+     * @param [type] $campos
+     * @return void
+     */
     public function insertSelect($tabela,$campos)
     {
         if(!is_array($campos)) {
@@ -805,6 +1033,12 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
+    /**
+     * Flag to init union in tables
+     *
+     * @param boolean $tipo
+     * @return void
+     */
     public function union($tipo=false)
     {
         $this->limparValores(true);
@@ -825,13 +1059,26 @@ class BuildQuery implements iBuildQuery
 
         return $this;
     }
-
+    
+    /**
+     * Set the msg to trigger in exception if nothing found
+     *
+     * @param [type] $msg
+     * @return void
+     */
     public function setMsgNaoEncontrado($msg)
     {
         $this->nao_encontrado_per = $msg;
         return $this;
     }
 
+    /**
+     * Set the limit to returns data
+     *
+     * @param [type] $limite
+     * @param boolean $offset
+     * @return void
+     */
     public function limit($limite, $offset=false)
     {
         if($limite != false) {
@@ -849,34 +1096,69 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
+    /**
+     * Flag indicate what generate log of sql code
+     *
+     * @param boolean $gerar
+     * @return void
+     */
     public function setGerarLog($gerar=true)
     {
         $this->gerar_log = $gerar;
         return $this;
     }
 
+    /**
+     * Flag indicate if use or not execption in not found
+     *
+     * @param boolean $usar
+     * @return void
+     */
     public function setUsarExceptionNaoEncontrado($usar=true)
     {
         $this->exception_not_found = $usar;
         return $this;
     }
 
+    /**
+     * Set returns (Boolean) false in nothing found
+     *
+     * @param boolean $usar
+     * @return void
+     */
     public function setFalseNaoEncontrado($usar = true)
     {
         $this->retornar_false_not_found = $usar;
         return $this;
     }
-
+    
+    /**
+     * Set return the affected lines in DML execution (INSERT, UPDATE, DELETE)
+     *
+     * @param [type] $linhas_afetadas
+     * @return void
+     */
     protected function setLinhasAfetadas($linhas_afetadas)
     {
         $this->linhas_afetadas = $linhas_afetadas;
     }
 
+    /**
+     * Get affected lines in DML execution
+     *
+     * @return void
+     */
     public function getLinhasAfetadas()
     {
         return $this->linhas_afetadas;
     }
 
+    /**
+     * Set personalizated return in found data
+     *
+     * @param [type] $retorno
+     * @return void
+     */
     public function setRetornoPersonalizado($retorno)
     {
         if(!is_array($retorno)) {
@@ -886,6 +1168,12 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
+    /**
+     * Set Events with disparate in array $eventos
+     *
+     * @param [type] $eventos
+     * @return void
+     */
     public function setEventosGravar($eventos)
     {
         if(is_array($eventos)) {
@@ -896,12 +1184,24 @@ class BuildQuery implements iBuildQuery
         return $this;
     }
 
+    /**
+     * Sinalize with log complex in use
+     *
+     * @return void
+     */
     public function setLogandoComplexo()
     {
         $this->gravar_log_complexo = true;
         return $this;
     }
 
+    /**
+     * Set log complex 
+     *
+     * @param [type] $query
+     * @param [type] $parametros
+     * @return void
+     */
     protected function setLogComplexo($query, $parametros)
     {
         if($this->eventos_gravar != false){
@@ -911,6 +1211,11 @@ class BuildQuery implements iBuildQuery
         }
     }
 
+    /**
+     * Get Where generated
+     *
+     * @return void
+     */
     public function getFullWhere()
     {
         $where = ($this->where != false) ? " ".$this->where : "";
@@ -924,6 +1229,13 @@ class BuildQuery implements iBuildQuery
             . $whereComplex;
     }
 
+    /**
+     * Build the sql code DML
+     *
+     * @param [type] $tipo
+     * @param boolean $usando_union
+     * @return void
+     */
     public function buildQuery($tipo, $usando_union=false)
     {
         $this->create($tipo,$this->table_in);
@@ -970,7 +1282,7 @@ class BuildQuery implements iBuildQuery
 
         if($this->method == "SELECT") {
             $is_select = true;
-            switch (self::$driver) {
+            switch ($this->driver) {
                 case "firebird":
                     $limitar = ((string) $this->limite != false) ? ' FIRST ? ' : "";
                     $limitar = ( (string) $this->offset != false) ? $limitar.' SKIP ? ' : $limitar;
@@ -1090,17 +1402,10 @@ class BuildQuery implements iBuildQuery
             $parametros = $dados_insert_query;
         }
 
-        //$this->query_executar[] = [$query, $parametros];
         $executar = $this;
-        if(!$usando_union) $executar = $this->executarSQL($query, $parametros);
+        if(!$usando_union) $executar = $this->execSql($query, $parametros);
 
         if(!$usando_union) {
-            if($this->gerar_log) {
-                //$valores_query = json_encode($dados_insert_query);
-                //$this->setLog(json_encode([$retorno, "query_sql" => $this->query_union, "valores_query" => $dados_insert_query]), 'info');
-                //$retorno = [$retorno, "query_sql" => $this->query_union." -> valores_query => ".$valores_query];
-            }
-
             $this->limparValores();
             $this->query_union = '';
         }
@@ -1108,5 +1413,170 @@ class BuildQuery implements iBuildQuery
         if($retorno_personalizado != false) return array_merge(["DADOS"=>$executar], $retorno_personalizado);
 
         return $executar;
+    }
+
+    /**
+     * Metho to show tables in database
+     *
+     * @return void
+     */
+    public function showTables() 
+    {
+        $retorno = false;
+
+        switch($this->driver) {
+            case 'mysql':
+                $retorno = $this->execSql('SHOW TABLES');
+                break;
+            case 'sqlite':
+                $retorno = $this->tabela('sqlite_master')->campos(['*'])->where('type','=','table')->buildQuery('select');
+                break;
+            case 'postgres':
+                $retorno = $this->tabela('pg_catalog.pg_tables')->campos(['*'])->buildQuery('select');
+                break;
+            case 'firebird':
+                break;
+        }
+
+        return $retorno;
+    }
+
+    /**
+     * Method to set fields DDL to inser table
+     * 
+     * Waiting for
+     * [
+     *  'field_name' => ['type' => 'integer', 'options_field' => ['NOT NULL','TESTE', 'PRIMARY KEY AUTOINCREMENT'] ]
+     * ]
+     *
+     * @param Array $campos
+     * @return void
+     */
+    public function camposDdlCreate(Array $campos, $primary_key = false) 
+    {
+
+        if(count($campos) == 0) throw new AppException('O array de campos DDL não pode ser vazio', 7845);
+
+        $this->campos_ddl = [];
+
+        $marcador = $this->getMarcador();
+
+        foreach($campos as $campo_nome => $campo_opcoes) {
+            
+            if(!is_string($campo_nome)) throw new AppException('O nome do campo precisa ser uma String', 7846);
+
+            if(!isset($campo_opcoes['type']) OR @empty($campo_opcoes['type'])) throw new AppException('É necessário passar o tipo do campo', 7847);
+            if(!isset($campo_opcoes['options_field']) OR @empty($campo_opcoes['options_field'])) throw new AppException('É necessário passar as opções do campo', 7848);
+            
+            if(strtolower($primary_key) == strtolower($campo_nome)) {
+                if($this->driver == 'sqlite')  {
+                    array_splice($campo_opcoes['options_field'], 2, 0, 'PRIMARY KEY');
+                }
+            }
+
+            $campo_opcoes['options_field'] = array_map('strtoupper', $campo_opcoes['options_field']);
+               
+            $this->campos_ddl[] = "$marcador".$campo_nome."$marcador ".strtoupper($campo_opcoes['type'])." ".implode(' ', $campo_opcoes['options_field']);
+        }
+
+        if($primary_key != false and $this->driver == 'mysql') {
+            $this->campos_ddl[] = "PRIMARY KEY ($marcador".$primary_key."$marcador)";
+        }
+        
+        return $this;
+    }
+
+    /**
+     * Set the MySql engine table
+     *
+     * @param [type] $engine
+     * @return void
+     */
+    public function setEngineMysql($engine) 
+    {
+        $this->engineMysql = 'ENGINE = ' . $engine;
+
+        return $this;
+    }
+
+    /**
+     * Set default character for table
+     *
+     * @param [type] $character
+     * @return void
+     */
+    public function setDefaultCharacter($character) 
+    {
+        $this->characterMysql = 'DEFAULT CHARACTER SET = ' . $character;
+
+        return $this;
+    }
+
+    /**
+     * Set collate for table
+     *
+     * @param [type] $collate
+     * @return void
+     */
+    public function setCollate($collate) 
+    {
+        $this->collateMysql = 'COLLATE = ' . $collate;
+
+        return $this;
+    }
+
+    /**
+     * To create a table
+     *
+     * @return void
+     */
+    public function createTable() 
+    {
+        if(strlen((string) $this->table_in) == 0) throw new AppException('É preciso informar o nome da tabela', 8457);
+        if(count((array) $this->campos_ddl) == 0) throw new AppException('É preciso informar os campos que serão adicionados', 8458);
+
+        $marcador = $this->getMarcador();
+        
+        $string = "CREATE TABLE $marcador". $this->table_in ."$marcador (".PHP_EOL;
+
+        $string .= implode(', '.PHP_EOL, $this->campos_ddl);
+
+        $string .= ')';
+
+        if($this->driver == 'mysql') {
+            if(strlen((string) $this->engineMysql) > 0) $string .= PHP_EOL.$this->engineMysql;
+            if(strlen((string) $this->characterMysql) > 0) $string .= PHP_EOL.$this->characterMysql;
+            if(strlen((string) $this->collateMysql) > 0) $string .= PHP_EOL.$this->collateMysql;
+        }
+
+        $string .= ';';
+
+        $this->iniciarTransacao();
+
+        $retornar = $this->execSql($string);
+
+        $this->commit();
+
+        return $retornar;
+    }
+
+    /**
+     * To Drop a table
+     *
+     * @return void
+     */
+    public function dropTable()
+    {
+        if(strlen((string) $this->table_in) == 0) throw new AppException('É preciso informar o nome da tabela', 8457);
+
+        $marcador = $this->getMarcador();
+
+        $this->iniciarTransacao();
+        
+        $retornar = $this->execSql("DROP TABLE $marcador".$this->table_in."$marcador  ");
+
+        $this->commit();
+
+        return $retornar;
     }
 }

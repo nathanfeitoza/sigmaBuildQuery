@@ -6,7 +6,7 @@ A build query php to make SQL executions easier by standardizing them. Databases
 
 To start BuildQuery, just make the following call:
    ```php
-    $var = \Sigma\BuildQuery::init( (string) 'driver',(string) 'host',(string) 'database',(string) 'user',(string) 'pass'[, (array) options);
+    $var = new Sigma\BuildQuery( (string) 'driver',(string) 'host',(string) 'database',(string) 'user',(string) 'pass'[, (array) options);
    ```
 After doing this, we have the method of executing SQL scripts (handwritten SQL)
    ```php
@@ -51,6 +51,13 @@ The methods of querybuilder are shown below:
             ->setRetornarLinhasAfetadas() // Count affected lines (for update, delete and insert)
             ->setRetornoPersonalizado($retorno) // Personalizated return
             ->buildQuery("select");
+            ->camposDdlCreate([], $primary_key = false); // To create DDL Fields
+            ->setEngineMysql($engine); // Set Mysql Engine
+            ->showTables(); // Show tables in db
+            ->setDefaultCharacter($caracter); // Se Default Character for create or alter table
+            ->setCollate($collate); // Set collate to table
+            ->createTable(); // To create a table
+            ->dropTable(); // To drop a table
    ```
 
    Example using simple transaction
@@ -120,4 +127,27 @@ The methods of querybuilder are shown below:
         $var->setEventosGravar(['INSERT','DELETE','UPDATE'])->setLogComplexo = function($con, $acao) {
            
         };
+   ```
+
+   # Execute DDL comands
+
+   ## Create Table
+
+     For create table use this example below.
+
+   ```php
+     $var->tabela('teste123')
+          ->camposDdlCreate([
+          'id' => [
+               'type' => 'int',
+               'options_field' => ['NOT NULL']
+          ],
+          'nome' => [
+               'type' => 'TINYTEXT',
+               'options_field' => ['NOT NULL']
+          ]
+          ], 'id')
+        ->setEngineMysql('InnoDB')
+        ->setGerarLog(true)
+        ->createTable();
    ```
