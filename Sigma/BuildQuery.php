@@ -78,7 +78,7 @@ class BuildQuery implements iBuildQuery
     protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false, $eventos_retornar = false;
     protected $pdo_padrao = false, $gravar_log_complexo = false, $dados_select_transacao;
     private $logger = false, $file_handler = false;
-    private $count_afetadas_insert = 0, $engineMysql, $characterMysql, $collateMysql;
+    private $count_afetadas_insert = 0, $engineMysql, $characterMysql, $collateMysql, $query_mounted;
     public $gravarsetLogComplexo;
 
     /**
@@ -432,6 +432,10 @@ class BuildQuery implements iBuildQuery
             'string_build',
             'campos_table',
             'campos_ddl',
+            'query_mounted',
+            'engineMysql',
+            'characterMysql',
+            'collateMysql',
             'where',
             'whereOr',
             'whereAnd',
@@ -467,6 +471,10 @@ class BuildQuery implements iBuildQuery
                 'retorno_personalizado',
                 'campos_table',
                 'campos_ddl',
+                'query_mounted',
+                'engineMysql',
+                'characterMysql',
+                'collateMysql',
                 'where',
                 'whereOr',
                 'whereAnd',
@@ -1403,6 +1411,10 @@ class BuildQuery implements iBuildQuery
         }
 
         $executar = $this;
+
+
+        $this->query_mounted = [$query, $parametros];
+        
         if(!$usando_union) $executar = $this->execSql($query, $parametros);
 
         if(!$usando_union) {
@@ -1413,6 +1425,16 @@ class BuildQuery implements iBuildQuery
         if($retorno_personalizado != false) return array_merge(["DADOS"=>$executar], $retorno_personalizado);
 
         return $executar;
+    }
+
+    /**
+     * Return the query mounted for build query
+     *
+     * @return void
+     */
+    public function getQueryMounted()
+    {
+        return $this->query_mounted;  
     }
 
     /**
@@ -1573,7 +1595,58 @@ class BuildQuery implements iBuildQuery
 
         $this->iniciarTransacao();
         
-        $retornar = $this->execSql("DROP TABLE $marcador".$this->table_in."$marcador  ");
+        $retornar = $this->execSql("DROP TABLE IF EXISTS $marcador".$this->table_in."$marcador  ");
+
+        $this->commit();
+
+        return $retornar;
+    }
+
+    /**
+     * To create a view
+     *
+     * @param [type] $nome_view
+     * @return void
+     */
+    public function createView($nome_view) 
+    {
+        $marcador = $this->getMarcador();
+
+        $querySelect = $this->getQueryMounted();
+
+        if(is_null($querySelect)) throw new AppException('É necessário montar um select para criar uma view', 9842);
+
+        $query = $this->getQueryMounted()[0];
+        $parametros = $this->getQueryMounted()[1];
+
+        $string = "CREATE VIEW $marcador".$nome_view."$marcador AS ".PHP_EOL;
+        $string .= $query.';;';
+
+        $this->iniciarTransacao();
+        
+        $retornar = $this->execSql($string, $parametros);
+
+        $this->commit();
+
+        return $retornar;
+    }
+
+    /**
+     * To drop a view
+     *
+     * @param [type] $nome_view
+     * @return void
+     */
+    public function dropView($nome_view)
+    {
+        //DROP VIEW `test`.`new_view`;
+        $marcador = $this->getMarcador();
+        
+        $string = "DROP VIEW $marcador".$nome_view."$marcador";
+
+        $this->iniciarTransacao();
+        
+        $retornar = $this->execSql($string);
 
         $this->commit();
 

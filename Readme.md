@@ -133,7 +133,7 @@ The methods of querybuilder are shown below:
 
    ## Create Table
 
-     For create table use this example below.
+   Create table use this example below.
 
    ```php
      $var->tabela('teste123')
@@ -150,4 +150,25 @@ The methods of querybuilder are shown below:
         ->setEngineMysql('InnoDB')
         ->setGerarLog(true)
         ->createTable();
+   ```
+   
+   Drop Table
+
+   ```php
+     $var->tabela('teste123')->dropTable();
+   ```
+
+   Create view use this example below.
+
+   ```php
+   $var->tabela('teste')
+        ->campos(['*'])
+        ->buildQuery('select', true)
+        ->createView('view_teste');
+   ```
+
+   Drop View
+
+   ```php
+     $var->dropView('view_teste');
    ```
