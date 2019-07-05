@@ -30,6 +30,7 @@ class BuildQuery implements iBuildQuery
     private $pass;
     private $opcoes;
 
+
     /**
      * Declaration of variables is storages for data
      *
@@ -78,7 +79,7 @@ class BuildQuery implements iBuildQuery
     protected $pdo_obj_usando = false, $contarLinhasAfetadas = false, $eventos_gravar = false, $eventos_retornar = false;
     protected $pdo_padrao = false, $gravar_log_complexo = false, $dados_select_transacao;
     private $logger = false, $file_handler = false;
-    private $count_afetadas_insert = 0, $engineMysql, $characterMysql, $collateMysql, $query_mounted;
+    private $count_afetadas_insert = 0, $engineMysql, $characterMysql, $collateMysql, $query_mounted, $foreign_key;
     public $gravarsetLogComplexo;
 
     /**
@@ -167,6 +168,33 @@ class BuildQuery implements iBuildQuery
         } else {
             $msg = "DRIVER INVÁLIDO";
             throw new AppException($msg, 001);
+        }
+    }
+
+    /**
+     * Set value Var
+     *
+     * @param [type] $var
+     * @param [type] $value
+     * @return void
+     */
+    protected function _set($var, $value) 
+    {
+        if(isset($this->$var)) {
+            $this->$var = $value;
+        }
+    }
+
+    /**
+     * Get value var
+     *
+     * @param [type] $var
+     * @return void
+     */
+    public function _get($var)
+    {
+        if(isset($this->$var)) {
+            return $this->$var;
         }
     }
 
@@ -382,16 +410,29 @@ class BuildQuery implements iBuildQuery
                 $retorno_suc = $exec;
             }
 
-        } catch (AppException $e) {
+        } catch (\Exception $e) {
             $this->rollback();
 
             $this->count_afetadas_insert = 0;
             $code = $e->getCode() == 710 ? $e->getCode() : 503;
             $msg = $e->getMessage().' - Query execSql: '.$query;
             $retorno_err = [$msg, $code];
+            $this->_set('msg_erro', $retorno_err);
             $this->setLog($msg.' - VALORES: '.json_encode($parametros), 'critical');
 
             throw new AppException($retorno_err[0], $retorno_err[1]);
+        } finally {
+
+            if($this->gravar_log_complexo == false) {
+                $this->setLogComplexo($query, $parametros);
+                $this->gravar_log_complexo = true;
+            }
+
+            $msg_log = isset($retorno_suc) ? $retorno_suc : $this->_get('msg_erro');
+
+            if ($this->gerar_log) {
+                $this->setLog(json_encode([$msg_log, "query_sql" => $query, "valores_query" => $parametros]), 'info');
+            }
         }
 
         if (isset($erro)) {
@@ -403,15 +444,6 @@ class BuildQuery implements iBuildQuery
             }
 
             throw new AppException($erro_msg, $cod_erro);
-        }
-
-        if($this->gravar_log_complexo == false) {
-            $this->setLogComplexo($query, $parametros);
-            $this->gravar_log_complexo = true;
-        }
-
-        if ($this->gerar_log) {
-            $this->setLog(json_encode([$retorno_suc, "query_sql" => $query, "valores_query" => $parametros]), 'info');
         }
 
         return $retorno_suc;
@@ -436,6 +468,7 @@ class BuildQuery implements iBuildQuery
             'engineMysql',
             'characterMysql',
             'collateMysql',
+            'foreign_key',
             'where',
             'whereOr',
             'whereAnd',
@@ -475,6 +508,7 @@ class BuildQuery implements iBuildQuery
                 'engineMysql',
                 'characterMysql',
                 'collateMysql',
+                'foreign_key',
                 'where',
                 'whereOr',
                 'whereAnd',
@@ -1548,6 +1582,57 @@ class BuildQuery implements iBuildQuery
     }
 
     /**
+     * Set Foreign Key for table
+     *
+     * @param [type] $foreign_key_name
+     * @param [type] $refence
+     * @param string $onDelete
+     * @param string $onUpdate
+     * @return void
+     */
+    public function setForeignKey($foreign_key_name, Array $refence, $onDelete = 'NO ACTION', $onUpdate = 'NO ACTION') 
+    {
+        $marcador = $this->getMarcador();
+
+        if(count((array) $this->campos_table) == 0) throw new AppException('É necessário informar os campos que comporão a foreign key', 488213);
+        if(count($refence) != 2) throw new AppException('A referência da chave estrangeira não é um array de duas posições', 41231);
+        if(@empty($refence['tabela']) OR @empty($refence['campos'])) throw new AppException('Não foi informado o campo '.(@empty($refence['tabela']) ? 'tabela' : 'campos').' da foreign key', 41231);
+
+        $campos_foreign = implode($marcador.' ', $this->campos_table);
+
+        $refence['campos'] = is_array($refence['campos']) ? $refence['campos'] : [$refence['campos']];
+        $refence['campos'] = implode($marcador.' ', $refence['campos']);
+
+        $validarAction = function($event, $event_name) {
+            $actions_permitidas_por_driver = [
+                'mysql' => ['RESTRICT','CASCADE','SET NULL','NO ACTION'],
+                'postgres' => ['RESTRICT','CASCADE','SET NULL','NO ACTION'],
+                'sqlite' => ['RESTRICT','CASCADE','SET NULL','SET DEFAULT','NO ACTION'],
+                'firebird' => ['RESTRICT','CASCADE','SET NULL','NO ACTION']
+            ];
+
+            if($event != false) {
+                if(!in_array($event, $actions_permitidas_por_driver[$this->driver])) throw new AppException('Action não permitida em '.$event_name, 41556);
+            }
+
+            return strtoupper($event);
+        };
+
+        $onDelete = $validarAction($onDelete,'onDelete');
+        $onUpdate = $validarAction($onUpdate,'onUpdate');
+
+        $foreign_key = "CONSTRAINT $marcador".$foreign_key_name."$marcador".PHP_EOL;
+        $foreign_key .= "FOREIGN KEY (".$campos_foreign.") ".PHP_EOL;
+        $foreign_key .= "REFERENCES $marcador".$refence['tabela']."$marcador (".$refence['campos'].") ".PHP_EOL;
+        $foreign_key .= "ON DELETE " . $onDelete.PHP_EOL;
+        $foreign_key .= "ON UPDATE " . $onUpdate.PHP_EOL;
+
+        $this->foreign_key[] = $foreign_key;
+        
+        return $this;
+    }
+
+    /**
      * To create a table
      *
      * @return void
@@ -1560,6 +1645,10 @@ class BuildQuery implements iBuildQuery
         $marcador = $this->getMarcador();
         
         $string = "CREATE TABLE $marcador". $this->table_in ."$marcador (".PHP_EOL;
+        
+        if(count((array) $this->foreign_key) > 0) {
+            $this->campos_ddl[] = implode(', ', $this->foreign_key);
+        }
 
         $string .= implode(', '.PHP_EOL, $this->campos_ddl);
 
@@ -1651,5 +1740,36 @@ class BuildQuery implements iBuildQuery
         $this->commit();
 
         return $retornar;
+    }
+    
+    /**
+     * Get information bd using pdo attributes
+     * https://www.php.net/manual/pt_BR/pdo.getattribute.php
+     *
+     * @param array $attribute
+     * @return void
+     */
+    public function getInformationDb($attribute = [])
+    {
+        $default = ["DRIVER_NAME","CLIENT_VERSION", "SERVER_VERSION"];
+        
+        $attribute = is_array($attribute) ? $attribute : [$attribute];
+
+        if(is_array($attribute)) array_merge($default, $attribute);
+        $array_retorno_info = [];
+
+        foreach ($default as $val) {
+            if(!is_string($val)) throw new AppException('O attributo '.print_r($val, true).' não é válido, pois é um array', 104578);
+            
+            $val = strtoupper($val);
+
+            try {
+                $array_retorno_info[$val] = $this->pdo()->getAttribute(constant("PDO::ATTR_$val"));
+            } catch (PDOException $e) {
+                throw new AppException('Erro Attribute: ' . $val . ' -> ' . $e->getMessage(), $e->getCode());
+            }
+        }
+
+        return $array_retorno_info;
     }
 }

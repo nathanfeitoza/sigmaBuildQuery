@@ -7,12 +7,11 @@
  */
 require '../vendor/autoload.php';
 
-echo'<pre>';
 try {
 
     //SQlite
     $sql = new \Sigma\BuildQuery('sqlite',__DIR__.'/sqlite/teste.db',null,null, null,['dir_log' => __DIR__.'/logs/']);
-    //$sqlMysql = new \Sigma\BuildQuery('mysql','localhost','test','root','12345678');
+    $sqlMysql = new \Sigma\BuildQuery('mysql','localhost','test','root','12345678', ['dir_log' => __DIR__.'/logs/']);
     
     /*
     // Postgres
@@ -35,10 +34,14 @@ try {
         ->setGerarLog(true)
         ->buildQuery('select', true)->createView('view_teste'); */
 
-    $dados = $sql->dropView('view_teste');
+    //$dados = $sql->dropView('view_teste');
+
+    $dados = $sql->getInformationDb();
+    //$dadosMysql = $sqlMysql->getInformationDb();
+
     
     //$dados = $sql->showTables();
-    /*$dados = $sql->tabela('teste123')
+    $dadosMysql = $sqlMysql->tabela('testando_teste')
     ->camposDdlCreate([
         'id' => [
             'type' => 'int',
@@ -50,12 +53,14 @@ try {
         ]
         ], 'id')
         ->setEngineMysql('InnoDB')
+        ->campos(['id'])
+        ->setForeignKey('teste_fk', ['tabela' => 'teste123', 'campos' => ['id']])
         ->setGerarLog(true)
-        ->createTable()*/; //
+        ->createTable(); //
 
-    //print_r($dados);
     print_r($dados);
-} catch(Exception $e) {
-    print_r($e->getMessage());
-    echo PHP_EOL.$e->getCode();
+    print_r($dadosMysql);
+} catch(\Sigma\AppException $e) {
+    //print_r($e->getMessage());
+    echo PHP_EOL.$e->getMessage();
 }

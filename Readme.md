@@ -150,6 +150,25 @@ The methods of querybuilder are shown below:
         ->setEngineMysql('InnoDB')
         ->setGerarLog(true)
         ->createTable();
+
+     // Create table with foreign key (alpha)
+     
+     $var->tabela('teste123')
+          ->camposDdlCreate([
+          'id' => [
+               'type' => 'int',
+               'options_field' => ['NOT NULL']
+          ],
+          'nome' => [
+               'type' => 'TINYTEXT',
+               'options_field' => ['NOT NULL']
+          ]
+          ], 'id')
+        ->setEngineMysql('InnoDB')
+        ->campos(['id'])
+        ->setForeignKey('teste_fk', ['tabela' => 'teste123', 'campos' => ['id']])
+        ->setGerarLog(true)
+        ->createTable();
    ```
    
    ## Drop Table
