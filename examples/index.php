@@ -60,7 +60,7 @@ try {
 
     print_r($dados);
     print_r($dadosMysql);
-} catch(\Sigma\AppException $e) {
+} catch(\Sigma\BuildQueryException $e) {
     //print_r($e->getMessage());
     echo PHP_EOL.$e->getMessage();
 }

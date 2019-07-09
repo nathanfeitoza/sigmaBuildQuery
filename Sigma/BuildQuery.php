@@ -83,7 +83,14 @@ class BuildQuery implements iBuildQuery
     public $gravarsetLogComplexo;
 
     /**
-     * The construct is private for class special call and not use 'new' only Sigma/BuildQuery($data)
+     * Construct class setting the values for connect in database
+     *
+     * @param [type] $driver
+     * @param [type] $host
+     * @param [type] $dbname
+     * @param [type] $user
+     * @param [type] $pass
+     * @param boolean $opcoes
      */
     public function __construct($driver, $host, $dbname, $user, $pass, $opcoes=false)
     {  
@@ -163,11 +170,11 @@ class BuildQuery implements iBuildQuery
                 //return $this->con;
             } catch (PDOException $e) {
                 $msg = "ERRO DE CONEXÃO " . $e->getMessage();
-                throw new AppException($msg, $e->getCode());
+                throw new BuildQueryException($msg, $e->getCode());
             }
         } else {
             $msg = "DRIVER INVÁLIDO";
-            throw new AppException($msg, 001);
+            throw new BuildQueryException($msg, 001);
         }
     }
 
@@ -317,7 +324,7 @@ class BuildQuery implements iBuildQuery
         $retornar_false_nao_encontrado = $this->retornar_false_not_found;
         $msg_nao_encontrado = $this->nao_encontrado_per;
 
-        if(!is_string($query)) throw new AppException('A querya informada não é uma string', 4578);
+        if(!is_string($query)) throw new BuildQueryException('A querya informada não é uma string', 4578);
 
         $query_analize = explode(" ", $query);
         $tipo = strtolower($query_analize[0]);
@@ -344,7 +351,7 @@ class BuildQuery implements iBuildQuery
                 if (!(is_array($parametros) AND count($parametros) != 0)) {
                     $msg = 'É necessário passar um array não nulo';
                     $this->setLog($msg, 'error');
-                    throw new AppException($msg, 002);
+                    throw new BuildQueryException($msg, 002);
                 }
 
                 for ($i = 0; $i < count($parametros); $i++) {
@@ -420,7 +427,7 @@ class BuildQuery implements iBuildQuery
             $this->_set('msg_erro', $retorno_err);
             $this->setLog($msg.' - VALORES: '.json_encode($parametros), 'critical');
 
-            throw new AppException($retorno_err[0], $retorno_err[1]);
+            throw new BuildQueryException($retorno_err[0], $retorno_err[1]);
         } finally {
 
             if($this->gravar_log_complexo == false) {
@@ -443,7 +450,7 @@ class BuildQuery implements iBuildQuery
                 $erro_msg = 'Nada encontrado na query: '.$query.' com os valores = '.json_encode($parametros);
             }
 
-            throw new AppException($erro_msg, $cod_erro);
+            throw new BuildQueryException($erro_msg, $cod_erro);
         }
 
         return $retorno_suc;
@@ -746,7 +753,7 @@ class BuildQuery implements iBuildQuery
     public function campos($campos,$update=false)
     {
         if(!is_array($campos)) {
-            throw new AppException("É necessário que os campos sejam passados em um array",853);
+            throw new BuildQueryException("É necessário que os campos sejam passados em um array",853);
         } else {
             if ($update != false) {
                 if (!is_array($update)) {
@@ -760,7 +767,7 @@ class BuildQuery implements iBuildQuery
                         $this->valores_add = $update;
                         $this->list_inter = $interrogas;
                     } else {
-                        throw new AppException("A quantidade de campos e de valores não coincidem -> ".json_encode( $campos ),109);
+                        throw new BuildQueryException("A quantidade de campos e de valores não coincidem -> ".json_encode( $campos ),109);
                     }
                 }
             }
@@ -1065,9 +1072,9 @@ class BuildQuery implements iBuildQuery
     public function insertSelect($tabela,$campos)
     {
         if(!is_array($campos)) {
-            throw new AppException("Os campos do insertSelect precisam ser passados em um array");
+            throw new BuildQueryException("Os campos do insertSelect precisam ser passados em um array");
         } elseif(!is_string($tabela)) {
-            throw new AppException("A tabela do insertSelect precisa ser uma String");
+            throw new BuildQueryException("A tabela do insertSelect precisa ser uma String");
         } else {
             $campos_usar = implode(",",$campos);
             $this->insertSelect = "SELECT ".$campos_usar." FROM ".$tabela;
@@ -1204,7 +1211,7 @@ class BuildQuery implements iBuildQuery
     public function setRetornoPersonalizado($retorno)
     {
         if(!is_array($retorno)) {
-            throw new AppException('Tipo de retorno personalizado não é um array',8);
+            throw new BuildQueryException('Tipo de retorno personalizado não é um array',8);
         }
         $this->retorno_personalizado = $retorno;
         return $this;
@@ -1221,7 +1228,7 @@ class BuildQuery implements iBuildQuery
         if(is_array($eventos)) {
             $this->eventos_gravar = @array_map('strtoupper', $eventos);
         } else {
-            throw new AppException('Os tipos de eventos passados não são um array', 15165);
+            throw new BuildQueryException('Os tipos de eventos passados não são um array', 15165);
         }
         return $this;
     }
@@ -1296,7 +1303,7 @@ class BuildQuery implements iBuildQuery
             if($this->msg_erro != false) {
                 $msg = (isset($msg)) ? $msg : $this->msg_erro;
                 $code_erro_return = isset($code_error) ? $code_error : 405;
-                throw new AppException($msg, $code_erro_return);
+                throw new BuildQueryException($msg, $code_erro_return);
             }
 
         }
@@ -1352,7 +1359,7 @@ class BuildQuery implements iBuildQuery
 
         } elseif ($this->method == "INSERT") {
             if($this->list_inter == false AND $this->insertSelect == false) {
-                throw new AppException("É ncessário passar os valores dos campos",007);
+                throw new BuildQueryException("É ncessário passar os valores dos campos",007);
 
             } else {
                 switch ($this->insertSelect) {
@@ -1397,7 +1404,7 @@ class BuildQuery implements iBuildQuery
                     . $campos_usar . ""
                     . $this->getFullWhere();
             } else {
-                throw new AppException('Layout incorreto para o método UPDATE ',107);
+                throw new BuildQueryException('Layout incorreto para o método UPDATE ',107);
             }
         } elseif($this->method == "DELETE") {
             $string_build = $this->method . " "
@@ -1406,7 +1413,7 @@ class BuildQuery implements iBuildQuery
                 . $this->getFullWhere()
                 . $groupby;
         } else {
-            throw new AppException("Metódo desconhecido", 108);
+            throw new BuildQueryException("Metódo desconhecido", 108);
 
         }
 
@@ -1511,7 +1518,7 @@ class BuildQuery implements iBuildQuery
     public function camposDdlCreate(Array $campos, $primary_key = false) 
     {
 
-        if(count($campos) == 0) throw new AppException('O array de campos DDL não pode ser vazio', 7845);
+        if(count($campos) == 0) throw new BuildQueryException('O array de campos DDL não pode ser vazio', 7845);
 
         $this->campos_ddl = [];
 
@@ -1519,10 +1526,10 @@ class BuildQuery implements iBuildQuery
 
         foreach($campos as $campo_nome => $campo_opcoes) {
             
-            if(!is_string($campo_nome)) throw new AppException('O nome do campo precisa ser uma String', 7846);
+            if(!is_string($campo_nome)) throw new BuildQueryException('O nome do campo precisa ser uma String', 7846);
 
-            if(!isset($campo_opcoes['type']) OR @empty($campo_opcoes['type'])) throw new AppException('É necessário passar o tipo do campo', 7847);
-            if(!isset($campo_opcoes['options_field']) OR @empty($campo_opcoes['options_field'])) throw new AppException('É necessário passar as opções do campo', 7848);
+            if(!isset($campo_opcoes['type']) OR @empty($campo_opcoes['type'])) throw new BuildQueryException('É necessário passar o tipo do campo', 7847);
+            if(!isset($campo_opcoes['options_field']) OR @empty($campo_opcoes['options_field'])) throw new BuildQueryException('É necessário passar as opções do campo', 7848);
             
             if(strtolower($primary_key) == strtolower($campo_nome)) {
                 if($this->driver == 'sqlite')  {
@@ -1594,9 +1601,9 @@ class BuildQuery implements iBuildQuery
     {
         $marcador = $this->getMarcador();
 
-        if(count((array) $this->campos_table) == 0) throw new AppException('É necessário informar os campos que comporão a foreign key', 488213);
-        if(count($refence) != 2) throw new AppException('A referência da chave estrangeira não é um array de duas posições', 41231);
-        if(@empty($refence['tabela']) OR @empty($refence['campos'])) throw new AppException('Não foi informado o campo '.(@empty($refence['tabela']) ? 'tabela' : 'campos').' da foreign key', 41231);
+        if(count((array) $this->campos_table) == 0) throw new BuildQueryException('É necessário informar os campos que comporão a foreign key', 488213);
+        if(count($refence) != 2) throw new BuildQueryException('A referência da chave estrangeira não é um array de duas posições', 41231);
+        if(@empty($refence['tabela']) OR @empty($refence['campos'])) throw new BuildQueryException('Não foi informado o campo '.(@empty($refence['tabela']) ? 'tabela' : 'campos').' da foreign key', 41231);
 
         $campos_foreign = implode($marcador.' ', $this->campos_table);
 
@@ -1612,7 +1619,7 @@ class BuildQuery implements iBuildQuery
             ];
 
             if($event != false) {
-                if(!in_array($event, $actions_permitidas_por_driver[$this->driver])) throw new AppException('Action não permitida em '.$event_name, 41556);
+                if(!in_array($event, $actions_permitidas_por_driver[$this->driver])) throw new BuildQueryException('Action não permitida em '.$event_name, 41556);
             }
 
             return strtoupper($event);
@@ -1639,8 +1646,8 @@ class BuildQuery implements iBuildQuery
      */
     public function createTable() 
     {
-        if(strlen((string) $this->table_in) == 0) throw new AppException('É preciso informar o nome da tabela', 8457);
-        if(count((array) $this->campos_ddl) == 0) throw new AppException('É preciso informar os campos que serão adicionados', 8458);
+        if(strlen((string) $this->table_in) == 0) throw new BuildQueryException('É preciso informar o nome da tabela', 8457);
+        if(count((array) $this->campos_ddl) == 0) throw new BuildQueryException('É preciso informar os campos que serão adicionados', 8458);
 
         $marcador = $this->getMarcador();
         
@@ -1678,7 +1685,7 @@ class BuildQuery implements iBuildQuery
      */
     public function dropTable()
     {
-        if(strlen((string) $this->table_in) == 0) throw new AppException('É preciso informar o nome da tabela', 8457);
+        if(strlen((string) $this->table_in) == 0) throw new BuildQueryException('É preciso informar o nome da tabela', 8457);
 
         $marcador = $this->getMarcador();
 
@@ -1703,7 +1710,7 @@ class BuildQuery implements iBuildQuery
 
         $querySelect = $this->getQueryMounted();
 
-        if(is_null($querySelect)) throw new AppException('É necessário montar um select para criar uma view', 9842);
+        if(is_null($querySelect)) throw new BuildQueryException('É necessário montar um select para criar uma view', 9842);
 
         $query = $this->getQueryMounted()[0];
         $parametros = $this->getQueryMounted()[1];
@@ -1759,17 +1766,32 @@ class BuildQuery implements iBuildQuery
         $array_retorno_info = [];
 
         foreach ($default as $val) {
-            if(!is_string($val)) throw new AppException('O attributo '.print_r($val, true).' não é válido, pois é um array', 104578);
+            if(!is_string($val)) throw new BuildQueryException('O attributo '.print_r($val, true).' não é válido, pois é um array', 104578);
             
             $val = strtoupper($val);
 
             try {
                 $array_retorno_info[$val] = $this->pdo()->getAttribute(constant("PDO::ATTR_$val"));
             } catch (PDOException $e) {
-                throw new AppException('Erro Attribute: ' . $val . ' -> ' . $e->getMessage(), $e->getCode());
+                throw new BuildQueryException('Erro Attribute: ' . $val . ' -> ' . $e->getMessage(), $e->getCode());
             }
         }
 
         return $array_retorno_info;
+    }
+
+    public function setContentTrigger($content)
+    {
+
+    }
+
+    public function createTigger($execution)
+    {
+        /** 
+         *     CREATE DEFINER = CURRENT_USER TRIGGER `test`.`new_table_BEFORE_INSERT` BEFORE INSERT ON `new_table` FOR EACH ROW
+*BEGIN
+
+*END
+         */
     }
 }

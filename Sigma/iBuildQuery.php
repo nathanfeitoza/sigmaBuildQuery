@@ -44,4 +44,6 @@ interface iBuildQuery
     public function createView($nome_view);
     public function dropView($nome_view);
     public function getInformationDb($attribute = []);
+    public function setContentTrigger($content);
+    public function createTigger($execution);
 }

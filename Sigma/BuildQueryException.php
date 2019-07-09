@@ -7,7 +7,7 @@ namespace Sigma;
 
 use Exception;
 
-class AppException extends Exception {
+class BuildQueryException extends Exception {
 
     public function __construct($message, $code = 0, Exception $previous = null) {
         // garante que tudo está corretamente inicializado
